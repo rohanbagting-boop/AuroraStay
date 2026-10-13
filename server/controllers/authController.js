@@ -74,7 +74,7 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
       resendCooldown: 60,
       expiresIn: 600,
       maxAttempts: 5,
-      ...(process.env.NODE_ENV !== 'production' || !env.emailConfigured ? { developmentOtp: otp } : {})
+      ...(process.env.NODE_ENV === 'test' || !env.emailConfigured ? { developmentOtp: otp } : {})
     },
     'Verification code sent to your email.'
   );
@@ -144,7 +144,7 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
       resendCooldown: 60,
       expiresIn: 600,
       maxAttempts: record.maxAttempts,
-      ...(process.env.NODE_ENV !== 'production' || !env.emailConfigured ? { developmentOtp: otp } : {})
+      ...(process.env.NODE_ENV === 'test' || !env.emailConfigured ? { developmentOtp: otp } : {})
     },
     'A new verification code has been sent to your email.'
   );
