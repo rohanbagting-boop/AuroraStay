@@ -230,6 +230,7 @@ async function upsertUser(email, password, role, name) {
   else {
     user.name = name;
     user.role = role;
+    user.password = password;
     user.isActive = true;
     user.deletedAt = null;
     await user.save();
