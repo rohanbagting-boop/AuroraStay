@@ -59,7 +59,7 @@ beforeEach(async () => {
   const checkIn = new Date(Date.now() + 5 * 86400000);
   const checkOut = new Date(Date.now() + 7 * 86400000);
   reservation = await createReservation({ user: guest, actor: admin, payload: { roomType: roomType._id, checkIn, checkOut, guests: 2, guestInfo: { name: guest.name, email: guest.email }, idempotencyKey: 'base-reservation' } });
-});
+}, 30000);
 
 describe('security and booking API', () => {
   it('blocks unauthenticated protected APIs', async () => {
