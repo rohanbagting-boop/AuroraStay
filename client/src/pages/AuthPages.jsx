@@ -124,6 +124,7 @@ export function Register() {
   const location = useLocation();
 
   const [step, setStep] = useState(location.state?.step || 'form'); // 'form' | 'otp'
+  const [notice, setNotice] = useState(location.state?.notice || '');
   const [error, setError] = useState('');
   const [devCode, setDevCode] = useState('');
   const [loading, setLoading] = useState(false);
