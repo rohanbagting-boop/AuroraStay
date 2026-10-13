@@ -37,6 +37,23 @@ export function AuthProvider({ children }) {
     return data.data.user;
   }
 
+  async function requestOtp(values) {
+    const { data } = await api.post('/auth/register/request-otp', values);
+    return data;
+  }
+
+  async function verifyOtp({ email, otp }) {
+    const { data } = await api.post('/auth/register/verify-otp', { email, otp });
+    setUser(data.data.user);
+    if (data.data?.csrfToken) setMemoryCsrf(data.data.csrfToken);
+    return data.data.user;
+  }
+
+  async function resendOtp(email) {
+    const { data } = await api.post('/auth/register/resend-otp', { email });
+    return data;
+  }
+
   async function logout() {
     try {
       await api.post('/auth/logout');
@@ -51,7 +68,10 @@ export function AuthProvider({ children }) {
     refresh();
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, register, logout, refresh }), [user, loading]);
+  const value = useMemo(
+    () => ({ user, loading, login, register, requestOtp, verifyOtp, resendOtp, logout, refresh }),
+    [user, loading]
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

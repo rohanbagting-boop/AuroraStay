@@ -31,7 +31,7 @@ export const allowRoles = (...roles) => (req, _res, next) => {
 
 export function requireCsrf(req, _res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  if (['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password'].includes(req.path)) return next();
+  if (req.path.startsWith('/api/auth/')) return next();
 
   if (req.headers.authorization?.startsWith('Bearer ')) return next();
 

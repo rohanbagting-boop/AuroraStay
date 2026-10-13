@@ -1,8 +1,7 @@
-import React from 'react';
-import { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, CalendarCheck, KeyRound, Mail, Phone, ShieldCheck, UserRound, Eye, EyeOff, Check } from 'lucide-react';
+import { ArrowRight, CalendarCheck, KeyRound, Mail, Phone, ShieldCheck, UserRound, Eye, EyeOff, Check, AlertCircle, ArrowLeft, Clock, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { Logo } from '../components/Logo.jsx';
@@ -110,13 +109,30 @@ export function Login() {
 }
 
 export function Register() {
-  const { register: registerUser } = useAuth();
+  const { requestOtp, verifyOtp, resendOtp } = useAuth();
   const navigate = useNavigate();
+  const [step, setStep] = useState('form'); // 'form' | 'otp'
   const [error, setError] = useState('');
-  const { register, handleSubmit, watch } = useForm();
+  const [notice, setNotice] = useState('');
+  const [devCode, setDevCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [otpValue, setOtpValue] = useState('');
+  const [remainingAttempts, setRemainingAttempts] = useState(5);
+  const [cooldown, setCooldown] = useState(0);
+  const [savedEmail, setSavedEmail] = useState('');
+
+  const { register, handleSubmit, watch, getValues } = useForm();
   const password = watch('password') || '';
 
-  async function submit(values) {
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  async function onFormSubmit(values) {
     const isLengthValid = values.password?.length >= 8;
     const hasLower = /[a-z]/.test(values.password || '');
     const hasUpper = /[A-Z]/.test(values.password || '');
@@ -127,23 +143,212 @@ export function Register() {
       return;
     }
 
+    setLoading(true);
+    setError('');
+    setNotice('');
     try {
-      await registerUser(values);
-      navigate('/account');
+      const res = await requestOtp(values);
+      setSavedEmail(values.email);
+      setStep('otp');
+      setCooldown(res.data?.resendCooldown || 60);
+      setRemainingAttempts(res.data?.maxAttempts || 5);
+      if (res.data?.developmentOtp) {
+        setDevCode(res.data.developmentOtp);
+      }
+      setNotice(res.message || 'Verification code sent to your email.');
     } catch (e) {
-      setError(e.response?.data?.message || 'Registration failed.');
+      setError(e.response?.data?.message || 'Failed to send verification code. Please check your details.');
+    } finally {
+      setLoading(false);
     }
   }
 
+  async function onVerifySubmit(e) {
+    e.preventDefault();
+    const cleanOtp = otpValue.trim();
+    if (cleanOtp.length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      await verifyOtp({ email: savedEmail, otp: cleanOtp });
+      navigate('/account');
+    } catch (e) {
+      const errorMsg = e.response?.data?.message || 'Verification failed. Please check the code.';
+      setError(errorMsg);
+      setRemainingAttempts((prev) => Math.max(0, prev - 1));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (cooldown > 0 || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await resendOtp(savedEmail);
+      setCooldown(res.data?.resendCooldown || 60);
+      setRemainingAttempts(res.data?.maxAttempts || 5);
+      if (res.data?.developmentOtp) {
+        setDevCode(res.data.developmentOtp);
+      }
+      setNotice('A new verification code has been sent to your email.');
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to resend code.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (step === 'otp') {
+    return (
+      <AuthForm
+        eyebrow="Security verification"
+        title="Verify your email"
+        subtitle="Enter the 6-digit code sent to your email to verify and complete your guest account."
+        onSubmit={onVerifySubmit}
+        error={error}
+        message={notice}
+      >
+        <div style={{ display: 'grid', gap: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <span className="otpEmailBadge">
+              <Mail size={15} />
+              {savedEmail}
+            </span>
+          </div>
+
+          <div className="otpInputWrapper">
+            <input
+              type="text"
+              className="otpInput"
+              placeholder="&bull;&bull;&bull;&bull;&bull;&bull;"
+              value={otpValue}
+              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              maxLength={6}
+              autoFocus
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+            />
+          </div>
+
+          <div className="otpMetaRow">
+            <span className="otpAttemptsBadge">
+              <AlertCircle size={14} />
+              {remainingAttempts} {remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining
+            </span>
+            <button
+              type="button"
+              className="otpResendBtn"
+              disabled={cooldown > 0 || loading}
+              onClick={handleResend}
+            >
+              {cooldown > 0 ? (
+                <>
+                  <Clock size={14} /> Resend in {cooldown}s
+                </>
+              ) : (
+                <>
+                  <RotateCcw size={14} /> Resend code
+                </>
+              )}
+            </button>
+          </div>
+
+          {devCode && (
+            <div className="otpDevNotice">
+              <span>Demo preview code: <strong>{devCode}</strong></span>
+              <button
+                type="button"
+                className="subtleButton"
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                onClick={() => setOtpValue(devCode)}
+              >
+                Auto-fill
+              </button>
+            </div>
+          )}
+
+          <button className="authSubmit" disabled={loading || otpValue.length !== 6}>
+            {loading ? 'Verifying...' : 'Verify & create account'} <ArrowRight size={18} />
+          </button>
+
+          <div className="authLinks single">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('form');
+                setError('');
+                setNotice('');
+                setOtpValue('');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.86rem',
+                fontWeight: 600,
+                padding: '0.4rem 0'
+              }}
+            >
+              <ArrowLeft size={16} /> Edit account details
+            </button>
+          </div>
+        </div>
+      </AuthForm>
+    );
+  }
+
   return (
-    <AuthForm eyebrow="New guest profile" title="Create your account" subtitle="Save your details once, then manage reservations and future stays more easily." onSubmit={handleSubmit(submit)} error={error}>
-      <label><span>Full name</span><div className="authField"><UserRound size={18} /><input placeholder="Your full name" {...register('name')} /></div></label>
-      <label><span>Email address</span><div className="authField"><Mail size={18} /><input placeholder="you@example.com" {...register('email')} /></div></label>
-      <label><span>Phone number</span><div className="authField"><Phone size={18} /><input placeholder="+63 900 000 0000" {...register('phone')} /></div></label>
-      <label><span>Password</span><PasswordInput placeholder="Create a secure password" registerObj={register('password')} /></label>
+    <AuthForm
+      eyebrow="New guest profile"
+      title="Create your account"
+      subtitle="Save your details once, then manage reservations and future stays more easily."
+      onSubmit={handleSubmit(onFormSubmit)}
+      error={error}
+      message={notice}
+    >
+      <label>
+        <span>Full name</span>
+        <div className="authField">
+          <UserRound size={18} />
+          <input placeholder="Your full name" {...register('name')} />
+        </div>
+      </label>
+      <label>
+        <span>Email address</span>
+        <div className="authField">
+          <Mail size={18} />
+          <input placeholder="you@example.com" {...register('email')} />
+        </div>
+      </label>
+      <label>
+        <span>Phone number</span>
+        <div className="authField">
+          <Phone size={18} />
+          <input placeholder="+63 900 000 0000" {...register('phone')} />
+        </div>
+      </label>
+      <label>
+        <span>Password</span>
+        <PasswordInput placeholder="Create a secure password" registerObj={register('password')} />
+      </label>
       <PasswordRequirements password={password} />
-      <button className="authSubmit">Create account <ArrowRight size={18} /></button>
-      <div className="authLinks single"><Link to="/login">Already have an account? Sign in</Link></div>
+      <button className="authSubmit" disabled={loading}>
+        {loading ? 'Sending code...' : 'Continue'} <ArrowRight size={18} />
+      </button>
+      <div className="authLinks single">
+        <Link to="/login">Already have an account? Sign in</Link>
+      </div>
     </AuthForm>
   );
 }

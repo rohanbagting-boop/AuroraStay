@@ -109,5 +109,37 @@ describe('security and booking API', () => {
     const res = await request(app).get('/api/health');
     expect(res.headers['x-dns-prefetch-control']).toBe('off');
   });
+
+  it('handles guest account creation with OTP flow, attempts tracking, and verification', async () => {
+    const reqRes = await request(app).post('/api/auth/register/request-otp').send({
+      name: 'New Guest',
+      email: 'newguest@aurorastay.test',
+      password: 'StrongPassword123',
+      phone: '+63 900 123 4567'
+    });
+    expect(reqRes.status).toBe(200);
+    const otp = reqRes.body.data.developmentOtp;
+    expect(otp).toBeDefined();
+
+    const badRes = await request(app).post('/api/auth/register/verify-otp').send({
+      email: 'newguest@aurorastay.test',
+      otp: '000000'
+    });
+    expect(badRes.status).toBe(400);
+    expect(badRes.body.message).toMatch(/remaining/i);
+
+    const cooldownRes = await request(app).post('/api/auth/register/resend-otp').send({
+      email: 'newguest@aurorastay.test'
+    });
+    expect(cooldownRes.status).toBe(429);
+
+    const verifyRes = await request(app).post('/api/auth/register/verify-otp').send({
+      email: 'newguest@aurorastay.test',
+      otp
+    });
+    expect(verifyRes.status).toBe(201);
+    expect(verifyRes.body.data.user.email).toBe('newguest@aurorastay.test');
+    expect(verifyRes.headers['set-cookie']).toBeDefined();
+  });
 });
 
