@@ -15,9 +15,9 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     isGmail
       ? {
           service: 'gmail',
-          pool: true,
-          maxConnections: 3,
-          socketTimeout: 30000,
+          connectionTimeout: 5000,
+          greetingTimeout: 5000,
+          socketTimeout: 5000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS.replace(/\s+/g, '')
@@ -27,9 +27,9 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
           host: process.env.SMTP_HOST,
           port: Number(process.env.SMTP_PORT || 587),
           secure: Number(process.env.SMTP_PORT) === 465,
-          pool: true,
-          maxConnections: 3,
-          socketTimeout: 30000,
+          connectionTimeout: 5000,
+          greetingTimeout: 5000,
+          socketTimeout: 5000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
@@ -39,6 +39,18 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
+  return Promise.race([
+    executeSendOtpEmail(email, otp, name),
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn(`[OTP Timeout] Email send to ${email} timed out after 5s. Returning fallback code.`);
+        resolve({ sent: false, devCode: otp, error: 'Email delivery timed out' });
+      }, 5000)
+    )
+  ]);
+}
+
+async function executeSendOtpEmail(email, otp, name = 'Guest') {
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
   if (transporter) {
     if (!from.includes('@')) {
@@ -187,6 +199,18 @@ export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') 
 }
 
 export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
+  return Promise.race([
+    executeSendPasswordResetOtpEmail(email, otp, name),
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn(`[Reset OTP Timeout] Email send to ${email} timed out after 5s. Returning fallback code.`);
+        resolve({ sent: false, devCode: otp, error: 'Email delivery timed out' });
+      }, 5000)
+    )
+  ]);
+}
+
+async function executeSendPasswordResetOtpEmail(email, otp, name = 'Guest') {
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
   if (transporter) {
     if (!from.includes('@')) {
