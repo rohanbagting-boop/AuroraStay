@@ -78,7 +78,7 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
 
   const message = emailResult.sent
     ? 'Verification code sent to your email.'
-    : 'Could not send email. Use the verification code shown below to complete registration.';
+    : 'Could not send email. Use the verification code shown on screen to complete registration.';
 
   ok(
     res,
@@ -87,7 +87,8 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
       resendCooldown: 60,
       expiresIn: 600,
       maxAttempts: 5,
-      ...(process.env.NODE_ENV === 'test' || !env.emailConfigured || !emailResult.sent ? { developmentOtp: otp } : {})
+      // Always expose the code when email fails so users can complete registration
+      ...(!emailResult.sent ? { developmentOtp: otp } : {})
     },
     message
   );
