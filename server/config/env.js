@@ -23,6 +23,10 @@ export const env = {
   taxRate: Number(process.env.TAX_RATE || 0.12),
   serviceFeeRate: Number(process.env.SERVICE_FEE_RATE || 0.05),
   cancellationHours: Number(process.env.CANCELLATION_HOURS || 24),
-  emailConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  emailConfigured: Boolean(
+    process.env.RESEND_API_KEY ||
+    (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  )
 };
 

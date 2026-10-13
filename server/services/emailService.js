@@ -1,9 +1,13 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
 let transporter = null;
+let resendClient = null;
 
-if (env.emailConfigured) {
+if (process.env.RESEND_API_KEY) {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+} else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
@@ -16,8 +20,13 @@ if (env.emailConfigured) {
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
-  const from = process.env.EMAIL_FROM || 'Aurora Stay Hotel <no-reply@aurorastayhotel.com>';
+  const defaultFrom = process.env.RESEND_API_KEY
+    ? (process.env.EMAIL_FROM || 'Aurora Stay Hotel <onboarding@resend.dev>')
+    : (process.env.EMAIL_FROM || 'Aurora Stay Hotel <no-reply@aurorastayhotel.com>');
+
+  const from = defaultFrom;
   const subject = `${otp} is your Aurora Stay verification code`;
+  const text = `Your Aurora Stay verification code is: ${otp}. This code expires in 10 minutes.`;
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #fffdfa; border: 1px solid #ded7cc; border-radius: 8px; padding: 28px; color: #282523;">
       <div style="border-bottom: 2px solid #a77b38; padding-bottom: 12px; margin-bottom: 20px;">
@@ -39,6 +48,28 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
+  // 1. Try Resend API if configured
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({
+        from,
+        to: email,
+        subject,
+        html,
+        text
+      });
+      if (response.error) {
+        console.error('[Resend Error]', response.error);
+      } else {
+        console.log(`[Resend] OTP email successfully sent to ${email} (ID: ${response.data?.id})`);
+        return { sent: true };
+      }
+    } catch (err) {
+      console.error('Failed to send OTP email via Resend API:', err.message);
+    }
+  }
+
+  // 2. Try SMTP via Nodemailer if configured
   if (transporter) {
     try {
       await transporter.sendMail({
@@ -46,15 +77,16 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
         to: email,
         subject,
         html,
-        text: `Your Aurora Stay verification code is: ${otp}. This code expires in 10 minutes.`
+        text
       });
+      console.log(`[SMTP] OTP email successfully sent to ${email}`);
       return { sent: true };
     } catch (err) {
       console.error('Failed to send OTP email via SMTP:', err.message);
     }
   }
 
-  // Fallback / Development logging
+  // 3. Fallback / Development console logging
   console.log(`\n========================================`);
   console.log(`[AURORA STAY OTP] Verification for: ${email}`);
   console.log(`[AURORA STAY OTP] Code: ${otp}`);
