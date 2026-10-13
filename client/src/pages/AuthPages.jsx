@@ -121,8 +121,13 @@ export function Register() {
   const [cooldown, setCooldown] = useState(0);
   const [savedEmail, setSavedEmail] = useState('');
 
-  const { register, handleSubmit, watch, getValues } = useForm();
+  const { register, handleSubmit, watch, getValues, setValue } = useForm();
   const password = watch('password') || '';
+  const phone = watch('phone') || '';
+
+  useEffect(() => {
+    register('phone');
+  }, [register]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -140,6 +145,12 @@ export function Register() {
 
     if (!isLengthValid || !hasLower || !hasUpper || !hasNumber) {
       setError('Please satisfy all password requirements before continuing.');
+      return;
+    }
+
+    const cleanPhone = (values.phone || '').trim();
+    if (cleanPhone && cleanPhone.length !== 11) {
+      setError('Phone number must be exactly 11 digits and contain numbers only.');
       return;
     }
 
@@ -332,10 +343,49 @@ export function Register() {
         </div>
       </label>
       <label>
-        <span>Phone number</span>
+        <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Phone number</span>
+          {phone.length > 0 && (
+            <small
+              style={{
+                color: phone.length === 11 ? '#10b981' : '#b45309',
+                fontSize: '0.78rem',
+                fontWeight: 600
+              }}
+            >
+              {phone.length}/11 digits
+            </small>
+          )}
+        </span>
         <div className="authField">
           <Phone size={18} />
-          <input placeholder="+63 900 000 0000" {...register('phone')} />
+          <input
+            type="tel"
+            inputMode="numeric"
+            maxLength={11}
+            placeholder="09123456789"
+            value={phone}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+              setValue('phone', digits, { shouldValidate: true });
+            }}
+            onKeyDown={(e) => {
+              if (
+                !/^\d$/.test(e.key) &&
+                !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End'].includes(e.key) &&
+                !e.ctrlKey &&
+                !e.metaKey
+              ) {
+                e.preventDefault();
+              }
+            }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData?.getData('text') || '';
+              const digits = pasted.replace(/\D/g, '').slice(0, 11);
+              setValue('phone', digits, { shouldValidate: true });
+            }}
+          />
         </div>
       </label>
       <label>

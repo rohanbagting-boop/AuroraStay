@@ -13,7 +13,12 @@ export const registerRules = [
   body('name').isString().trim().isLength({ min: 2, max: 80 }),
   body('email').isEmail().normalizeEmail(),
   passwordRule,
-  body('phone').optional().isString().trim().isLength({ max: 40 })
+  body('phone')
+    .optional({ checkFalsy: true })
+    .isString()
+    .trim()
+    .matches(/^\d{11}$/)
+    .withMessage('Phone number must be exactly 11 digits and contain numbers only.')
 ];
 
 export const verifyOtpRules = [

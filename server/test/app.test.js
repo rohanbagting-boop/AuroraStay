@@ -111,11 +111,19 @@ describe('security and booking API', () => {
   });
 
   it('handles guest account creation with OTP flow, attempts tracking, and verification', async () => {
+    const invalidPhoneRes = await request(app).post('/api/auth/register/request-otp').send({
+      name: 'Invalid Phone Guest',
+      email: 'invalidphone@aurorastay.test',
+      password: 'StrongPassword123',
+      phone: '0941312314123131231'
+    });
+    expect(invalidPhoneRes.status).toBe(400);
+
     const reqRes = await request(app).post('/api/auth/register/request-otp').send({
       name: 'New Guest',
       email: 'newguest@aurorastay.test',
       password: 'StrongPassword123',
-      phone: '+63 900 123 4567'
+      phone: '09171234567'
     });
     expect(reqRes.status).toBe(200);
     const otp = reqRes.body.data.developmentOtp;
