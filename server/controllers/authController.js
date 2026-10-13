@@ -210,7 +210,10 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
     await audit(req, 'auth.password_reset_requested', 'User', user._id);
-    await sendPasswordResetEmail(email, token, user.name);
+    // Fire-and-forget: respond immediately, send email in background
+    sendPasswordResetEmail(email, token, user.name).catch((err) =>
+      console.error('[ForgotPassword] Email send error:', err.message)
+    );
   }
   ok(res, null, 'If an account with that email exists, password reset instructions have been sent.');
 });
