@@ -19,9 +19,9 @@ export const register = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.validated;
   const user = await User.create({ name, email, password, phone, role: 'guest' });
   await audit(req, 'auth.register', 'User', user._id);
-  setCsrfCookie(req, res);
+  const csrfToken = setCsrfCookie(req, res);
   setAuthCookie(res, signToken(user));
-  created(res, { user }, 'Registration successful.');
+  created(res, { user, csrfToken }, 'Registration successful.');
 });
 
 export const login = asyncHandler(async (req, res) => {
@@ -30,11 +30,11 @@ export const login = asyncHandler(async (req, res) => {
   if (!user || !user.isActive || !(await user.comparePassword(password))) {
     throw new AppError(401, 'Incorrect email and password. Please try again.', 'INVALID_CREDENTIALS');
   }
-  setCsrfCookie(req, res);
+  const csrfToken = setCsrfCookie(req, res);
   setAuthCookie(res, signToken(user));
   req.user = user;
   await audit(req, 'auth.login', 'User', user._id);
-  ok(res, { user }, 'Login successful.');
+  ok(res, { user, csrfToken }, 'Login successful.');
 });
 
 export const logout = asyncHandler(async (req, res) => {
@@ -43,8 +43,8 @@ export const logout = asyncHandler(async (req, res) => {
 });
 
 export const me = asyncHandler(async (req, res) => {
-  setCsrfCookie(req, res);
-  ok(res, { user: req.user, csrfToken: req.cookies?.hotel_csrf });
+  const csrfToken = setCsrfCookie(req, res);
+  ok(res, { user: req.user, csrfToken });
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {

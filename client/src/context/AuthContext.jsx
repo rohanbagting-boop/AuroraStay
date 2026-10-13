@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../services/api.js';
+import { api, setMemoryCsrf } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
@@ -11,8 +11,13 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data.data.user);
+      if (data.data?.csrfToken) setMemoryCsrf(data.data.csrfToken);
     } catch {
       setUser(null);
+      try {
+        const { data: csrfData } = await api.get('/auth/csrf');
+        if (csrfData.data?.csrfToken) setMemoryCsrf(csrfData.data.csrfToken);
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -21,12 +26,14 @@ export function AuthProvider({ children }) {
   async function login(values) {
     const { data } = await api.post('/auth/login', values);
     setUser(data.data.user);
+    if (data.data?.csrfToken) setMemoryCsrf(data.data.csrfToken);
     return data.data.user;
   }
 
   async function register(values) {
     const { data } = await api.post('/auth/register', values);
     setUser(data.data.user);
+    if (data.data?.csrfToken) setMemoryCsrf(data.data.csrfToken);
     return data.data.user;
   }
 

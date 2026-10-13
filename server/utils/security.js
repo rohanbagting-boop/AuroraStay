@@ -35,6 +35,9 @@ export function setCsrfCookie(req, res) {
     maxAge: 2 * 60 * 60 * 1000,
     path: '/'
   });
+  if (res && res.setHeader) {
+    res.setHeader('X-CSRF-Token', token);
+  }
   return token;
 }
 

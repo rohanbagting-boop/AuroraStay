@@ -32,8 +32,28 @@ export const allowRoles = (...roles) => (req, _res, next) => {
 export function requireCsrf(req, _res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password'].includes(req.path)) return next();
+
+  if (req.headers.authorization?.startsWith('Bearer ')) return next();
+
   const cookie = req.cookies?.[csrfCookieName];
   const header = req.get('x-csrf-token');
+
+  // Double-submit cookie match
+  if (cookie && header && cookie === header) return next();
+
+  // Allowed origin check (e.g. Vercel deployment or localhost)
+  const origin = req.get('origin');
+  const explicitOrigins = env.clientOrigin ? env.clientOrigin.split(',').map((s) => s.trim()) : [];
+  const isAllowedOrigin = origin && (
+    explicitOrigins.includes(origin) ||
+    /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin) ||
+    /^http:\/\/localhost(:\d+)?$/.test(origin)
+  );
+
+  if (isAllowedOrigin && (header || req.is('application/json'))) {
+    return next();
+  }
+
   if (!cookie || !header || cookie !== header) return next(new AppError(403, 'Invalid CSRF token.', 'CSRF_INVALID'));
   next();
 }

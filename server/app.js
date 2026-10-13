@@ -7,6 +7,7 @@ import mongoSanitize from 'express-mongo-sanitize';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { requireCsrf } from './middleware/auth.js';
+import { setCsrfCookie } from './utils/security.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { rejectOperators } from './middleware/validate.js';
 import { writeLimiter } from './middleware/rateLimits.js';
@@ -21,6 +22,7 @@ import { dashboardRoutes } from './routes/dashboardRoutes.js';
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
+  app.use(helmet());
   const explicitOrigins = env.clientOrigin ? env.clientOrigin.split(',').map((s) => s.trim()) : [];
   app.use(
     cors({
@@ -35,7 +37,8 @@ export function createApp() {
         }
         callback(null, false);
       },
-      credentials: true
+      credentials: true,
+      exposedHeaders: ['x-csrf-token', 'X-CSRF-Token']
     })
   );
   app.use(compression());
@@ -44,10 +47,20 @@ export function createApp() {
   app.use(rejectOperators);
   app.use(mongoSanitize());
   app.use(writeLimiter);
+  app.use((req, res, next) => {
+    if (['GET', 'HEAD'].includes(req.method)) {
+      setCsrfCookie(req, res);
+    }
+    next();
+  });
   app.use(requireCsrf);
   if (env.nodeEnv !== 'test') app.use(morgan('dev'));
 
   app.get('/api/health', (_req, res) => res.json({ success: true, message: 'Hotel API is healthy.' }));
+  app.get('/api/auth/csrf', (req, res) => {
+    const token = setCsrfCookie(req, res);
+    res.json({ success: true, data: { csrfToken: token } });
+  });
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
   app.use('/api/room-types', roomTypeRoutes);

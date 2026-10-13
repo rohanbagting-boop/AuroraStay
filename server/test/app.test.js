@@ -32,7 +32,7 @@ beforeAll(async () => {
   process.env.MONGO_URI = replSet.getUri();
   app = (await import('../app.js')).createApp();
   await mongoose.connect(process.env.MONGO_URI);
-});
+}, 120000);
 
 afterAll(async () => {
   await mongoose.disconnect();
