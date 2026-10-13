@@ -40,12 +40,6 @@ export const resendOtpRules = [
 
 export const loginRules = [body('email').isEmail().normalizeEmail(), body('password').isString().isLength({ min: 1, max: 128 })];
 
-// Wrap a promise with a timeout fallback so email sending never blocks the response
-const withTimeout = (promise, ms, fallback) =>
-  Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
-  ]);
 
 export const requestRegistrationOtp = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.validated;
@@ -80,11 +74,7 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
     { upsert: true, new: true }
   );
 
-  const emailResult = await withTimeout(
-    sendOtpEmail(email, otp, name),
-    25000,
-    { sent: false, devCode: otp, error: 'timeout' }
-  );
+  const emailResult = await sendOtpEmail(email, otp, name);
 
   const message = emailResult.sent
     ? 'Verification code sent to your email.'
@@ -158,11 +148,7 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
   record.resendCooldownUntil = new Date(Date.now() + 60 * 1000);
   await record.save();
 
-  const emailResult = await withTimeout(
-    sendOtpEmail(email, otp, record.registrationData?.name),
-    25000,
-    { sent: false, devCode: otp, error: 'timeout' }
-  );
+  const emailResult = await sendOtpEmail(email, otp, record.registrationData?.name);
 
   const message = emailResult.sent
     ? 'A new verification code has been sent to your email.'
@@ -247,22 +233,13 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   await audit(req, 'auth.password_reset_code_requested', 'User', user._id);
 
-  let emailResult = { sent: false, devCode: otp };
-  try {
-    emailResult = await withTimeout(
-      sendPasswordResetOtpEmail(email, otp, user.name),
-      25000,
-      { sent: false, devCode: otp, error: 'Email timeout' }
-    );
-  } catch (err) {
-    emailResult = { sent: false, devCode: otp, error: err.message };
-  }
+  const emailResult = await sendPasswordResetOtpEmail(email, otp, user.name);
 
   const responseData = {
     email,
     sent: emailResult.sent
   };
-  if (!emailResult.sent || env.nodeEnv !== 'production' || emailResult.devCode) {
+  if (!emailResult.sent) {
     responseData.devCode = otp;
   }
 
@@ -283,22 +260,13 @@ export const resendResetCode = asyncHandler(async (req, res) => {
   user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  let emailResult = { sent: false, devCode: otp };
-  try {
-    emailResult = await withTimeout(
-      sendPasswordResetOtpEmail(email, otp, user.name),
-      25000,
-      { sent: false, devCode: otp, error: 'Email timeout' }
-    );
-  } catch (err) {
-    emailResult = { sent: false, devCode: otp, error: err.message };
-  }
+  const emailResult = await sendPasswordResetOtpEmail(email, otp, user.name);
 
   const responseData = {
     email,
     sent: emailResult.sent
   };
-  if (!emailResult.sent || env.nodeEnv !== 'production' || emailResult.devCode) {
+  if (!emailResult.sent) {
     responseData.devCode = otp;
   }
 

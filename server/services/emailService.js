@@ -5,6 +5,10 @@ import { env } from '../config/env.js';
 let transporter = null;
 let resendClient = null;
 
+if (process.env.RESEND_API_KEY) {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+}
+
 if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   const isGmail = process.env.SMTP_HOST.toLowerCase().includes('gmail');
   transporter = nodemailer.createTransport(
@@ -32,8 +36,6 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
           }
         }
   );
-} else if (process.env.RESEND_API_KEY) {
-  resendClient = new Resend(process.env.RESEND_API_KEY);
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
@@ -68,7 +70,27 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
-  // 1. Try SMTP via Nodemailer if configured
+  // 1. Try Resend API first for fast sub-second delivery
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({
+        from: from.includes('@') ? from : 'Aurora Stay Hotel <onboarding@resend.dev>',
+        to: email,
+        subject,
+        html,
+        text
+      });
+      if (!response.error) {
+        console.log(`[Resend] OTP email successfully sent to ${email} (ID: ${response.data?.id})`);
+        return { sent: true };
+      }
+      console.warn('[Resend delivery notice, trying SMTP fallback]:', response.error);
+    } catch (err) {
+      console.warn('[Resend exception, trying SMTP fallback]:', err.message);
+    }
+  }
+
+  // 2. Try SMTP via Nodemailer
   if (transporter) {
     try {
       await transporter.sendMail({
@@ -82,29 +104,6 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
       return { sent: true };
     } catch (err) {
       console.error('Failed to send OTP email via SMTP:', err.message);
-      return { sent: false, devCode: otp, error: err.message };
-    }
-  }
-
-  // 2. Try Resend API if configured
-  if (resendClient) {
-    try {
-      const response = await resendClient.emails.send({
-        from,
-        to: email,
-        subject,
-        html,
-        text
-      });
-      if (response.error) {
-        console.error('[Resend Error]', response.error);
-        return { sent: false, devCode: otp, error: response.error.message };
-      } else {
-        console.log(`[Resend] OTP email successfully sent to ${email} (ID: ${response.data?.id})`);
-        return { sent: true };
-      }
-    } catch (err) {
-      console.error('Failed to send OTP email via Resend API:', err.message);
       return { sent: false, devCode: otp, error: err.message };
     }
   }
@@ -220,6 +219,27 @@ export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
+  // 1. Try Resend API first for fast sub-second delivery
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({
+        from: from.includes('@') ? from : 'Aurora Stay Hotel <onboarding@resend.dev>',
+        to: email,
+        subject,
+        html,
+        text
+      });
+      if (!response.error) {
+        console.log(`[Resend] Password reset OTP sent to ${email} (ID: ${response.data?.id})`);
+        return { sent: true };
+      }
+      console.warn('[Resend delivery notice, trying SMTP fallback]:', response.error);
+    } catch (err) {
+      console.warn('[Resend exception, trying SMTP fallback]:', err.message);
+    }
+  }
+
+  // 2. Try SMTP via Nodemailer
   if (transporter) {
     try {
       await transporter.sendMail({ from, to: email, subject, html, text });
@@ -227,21 +247,6 @@ export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
       return { sent: true };
     } catch (err) {
       console.error('Failed to send password reset OTP via SMTP:', err.message);
-      return { sent: false, devCode: otp, error: err.message };
-    }
-  }
-
-  if (resendClient) {
-    try {
-      const response = await resendClient.emails.send({ from, to: email, subject, html, text });
-      if (response.error) {
-        console.error('[Resend Error]', response.error);
-        return { sent: false, devCode: otp, error: response.error.message };
-      }
-      console.log(`[Resend] Password reset OTP sent to ${email}`);
-      return { sent: true };
-    } catch (err) {
-      console.error('Failed to send password reset OTP via Resend:', err.message);
       return { sent: false, devCode: otp, error: err.message };
     }
   }
