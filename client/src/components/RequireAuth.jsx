@@ -10,3 +10,14 @@ export function RequireAuth({ roles, children }) {
   return children;
 }
 
+// Redirects already-logged-in users away from guest-only pages (login, register, etc.)
+export function GuestOnly({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="page"><div className="loader">Loading</div></div>;
+  if (user) {
+    if (user.role === 'admin' || user.role === 'receptionist') return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/account" replace />;
+  }
+  return children;
+}
+
