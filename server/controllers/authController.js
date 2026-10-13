@@ -82,7 +82,7 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await withTimeout(
     sendOtpEmail(email, otp, name),
-    8000,
+    25000,
     { sent: false, devCode: otp, error: 'timeout' }
   );
 
@@ -160,7 +160,7 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await withTimeout(
     sendOtpEmail(email, otp, record.registrationData?.name),
-    8000,
+    25000,
     { sent: false, devCode: otp, error: 'timeout' }
   );
 
@@ -251,7 +251,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   try {
     emailResult = await withTimeout(
       sendPasswordResetOtpEmail(email, otp, user.name),
-      8000,
+      25000,
       { sent: false, devCode: otp, error: 'Email timeout' }
     );
   } catch (err) {
@@ -287,7 +287,7 @@ export const resendResetCode = asyncHandler(async (req, res) => {
   try {
     emailResult = await withTimeout(
       sendPasswordResetOtpEmail(email, otp, user.name),
-      8000,
+      25000,
       { sent: false, devCode: otp, error: 'Email timeout' }
     );
   } catch (err) {
