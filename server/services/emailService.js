@@ -13,6 +13,8 @@ const smtpEnabled =
 
 /**
  * Creates a fresh SMTP transporter on every call.
+ * Uses explicit host + port 587 STARTTLS for Gmail (never `service:'gmail'`
+ * which ignores custom timeout options).
  * Avoids stale connection-pool issues on Render / containerized deployments.
  */
 function createSmtpTransporter() {
@@ -21,9 +23,14 @@ function createSmtpTransporter() {
   return nodemailer.createTransport(
     isGmail
       ? {
-          service: 'gmail',
+          // Explicit Gmail SMTP — port 587 STARTTLS works from cloud IPs
+          // where port 465 SSL is often blocked at the network level.
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false, // STARTTLS (upgrades after connection)
+          connectionTimeout: 12000,
+          greetingTimeout: 10000,
           socketTimeout: 15000,
-          connectionTimeout: 10000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS.replace(/\s+/g, '')
@@ -33,8 +40,9 @@ function createSmtpTransporter() {
           host: process.env.SMTP_HOST,
           port: Number(process.env.SMTP_PORT || 587),
           secure: Number(process.env.SMTP_PORT) === 465,
+          connectionTimeout: 12000,
+          greetingTimeout: 10000,
           socketTimeout: 15000,
-          connectionTimeout: 10000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
@@ -43,7 +51,27 @@ function createSmtpTransporter() {
   );
 }
 
+/**
+ * Wraps a send promise with a hard 20-second timeout so that blocked SMTP
+ * connections on cloud hosts (Render/AWS) never hang the HTTP request.
+ */
+function withTimeout(promise, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn('[Email] Send timed out after 20s — returning fallback.');
+        resolve(fallback);
+      }, 20000)
+    )
+  ]);
+}
+
 export async function sendOtpEmail(email, otp, name = 'Guest') {
+  return withTimeout(_sendOtpEmail(email, otp, name), { sent: false, devCode: otp });
+}
+
+async function _sendOtpEmail(email, otp, name = 'Guest') {
   const transporter = createSmtpTransporter();
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
   if (smtpEnabled) {
@@ -96,16 +124,10 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     }
   }
 
-  // 2. Try SMTP via Nodemailer
+  // 2. Try SMTP via Nodemailer (port 587 STARTTLS)
   if (transporter) {
     try {
-      await transporter.sendMail({
-        from,
-        to: email,
-        subject,
-        html,
-        text
-      });
+      await transporter.sendMail({ from, to: email, subject, html, text });
       console.log(`[SMTP] OTP email successfully sent to ${email}`);
       return { sent: true };
     } catch (err) {
@@ -114,12 +136,8 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     }
   }
 
-  // 3. Fallback / Development console logging
-  console.log(`\n========================================`);
-  console.log(`[AURORA STAY OTP] Verification for: ${email}`);
-  console.log(`[AURORA STAY OTP] Code: ${otp}`);
-  console.log(`========================================\n`);
-
+  // 3. Fallback
+  console.log(`[AURORA STAY OTP] Code for ${email}: ${otp}`);
   return { sent: false, devCode: otp };
 }
 
@@ -194,6 +212,10 @@ export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') 
 }
 
 export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
+  return withTimeout(_sendPasswordResetOtpEmail(email, otp, name), { sent: false, devCode: otp });
+}
+
+async function _sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
   const transporter = createSmtpTransporter();
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
   if (smtpEnabled) {
