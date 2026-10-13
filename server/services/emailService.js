@@ -5,24 +5,35 @@ import { env } from '../config/env.js';
 let transporter = null;
 let resendClient = null;
 
-if (process.env.RESEND_API_KEY) {
+if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  const isGmail = process.env.SMTP_HOST.toLowerCase().includes('gmail');
+  transporter = nodemailer.createTransport(
+    isGmail
+      ? {
+          service: 'gmail',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS.replace(/\s+/g, '')
+          }
+        }
+      : {
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT || 587),
+          secure: Number(process.env.SMTP_PORT) === 465,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+          }
+        }
+  );
+} else if (process.env.RESEND_API_KEY) {
   resendClient = new Resend(process.env.RESEND_API_KEY);
-} else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
-  const defaultFrom = process.env.RESEND_API_KEY
-    ? (process.env.EMAIL_FROM || 'Aurora Stay Hotel <onboarding@resend.dev>')
-    : (process.env.EMAIL_FROM || 'Aurora Stay Hotel <no-reply@aurorastayhotel.com>');
+  const defaultFrom = transporter
+    ? (process.env.EMAIL_FROM || `"Aurora Stay Hotel" <${process.env.SMTP_USER}>`)
+    : (process.env.EMAIL_FROM || 'Aurora Stay Hotel <onboarding@resend.dev>');
 
   const from = defaultFrom;
   const subject = `${otp} is your Aurora Stay verification code`;
@@ -48,7 +59,25 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
-  // 1. Try Resend API if configured
+  // 1. Try SMTP via Nodemailer if configured
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from,
+        to: email,
+        subject,
+        html,
+        text
+      });
+      console.log(`[SMTP] OTP email successfully sent to ${email}`);
+      return { sent: true };
+    } catch (err) {
+      console.error('Failed to send OTP email via SMTP:', err.message);
+      return { sent: false, devCode: otp, error: err.message };
+    }
+  }
+
+  // 2. Try Resend API if configured
   if (resendClient) {
     try {
       const response = await resendClient.emails.send({
@@ -68,23 +97,6 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
     } catch (err) {
       console.error('Failed to send OTP email via Resend API:', err.message);
       return { sent: false, devCode: otp, error: err.message };
-    }
-  }
-
-  // 2. Try SMTP via Nodemailer if configured
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from,
-        to: email,
-        subject,
-        html,
-        text
-      });
-      console.log(`[SMTP] OTP email successfully sent to ${email}`);
-      return { sent: true };
-    } catch (err) {
-      console.error('Failed to send OTP email via SMTP:', err.message);
     }
   }
 
