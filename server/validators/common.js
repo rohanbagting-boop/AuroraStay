@@ -5,10 +5,12 @@ export const pagination = [query('page').optional().isInt({ min: 1 }), query('li
 
 export const passwordRule = body('password')
   .isString()
-  .isLength({ min: 10, max: 128 })
-  .withMessage('Password must be between 10 and 128 characters.')
+  .isLength({ min: 8, max: 128 })
+  .withMessage('Password must be at least 8 characters long.')
   .matches(/[a-z]/)
+  .withMessage('Password must include at least one lowercase letter.')
   .matches(/[A-Z]/)
+  .withMessage('Password must include at least one uppercase letter.')
   .matches(/[0-9]/)
-  .withMessage('Password must include uppercase, lowercase, and number characters.');
+  .withMessage('Password must include at least one number.');
 
