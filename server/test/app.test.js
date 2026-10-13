@@ -141,6 +141,14 @@ describe('security and booking API', () => {
     });
     expect(cooldownRes.status).toBe(429);
 
+    const unverifiedLoginRes = await request(app).post('/api/auth/login').send({
+      email: 'newguest@aurorastay.test',
+      password: 'StrongPassword123'
+    });
+    expect(unverifiedLoginRes.status).toBe(403);
+    expect(unverifiedLoginRes.body.code).toBe('REGISTRATION_UNVERIFIED');
+
+
     const verifyRes = await request(app).post('/api/auth/register/verify-otp').send({
       email: 'newguest@aurorastay.test',
       otp

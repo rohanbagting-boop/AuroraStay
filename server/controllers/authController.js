@@ -162,7 +162,18 @@ export const register = asyncHandler(async (req, res) => {
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.validated;
   const user = await User.findOne({ email, deletedAt: null }).select('+password +tokenVersion +passwordChangedAt');
-  if (!user || !user.isActive || !(await user.comparePassword(password))) {
+  if (!user) {
+    const pendingOtp = await OtpVerification.findOne({ email, expiresAt: { $gt: new Date() } });
+    if (pendingOtp) {
+      throw new AppError(
+        403,
+        'Your account registration is pending verification. Please enter the verification code sent to your email.',
+        'REGISTRATION_UNVERIFIED'
+      );
+    }
+    throw new AppError(401, 'Incorrect email and password. Please try again.', 'INVALID_CREDENTIALS');
+  }
+  if (!user.isActive || !(await user.comparePassword(password))) {
     throw new AppError(401, 'Incorrect email and password. Please try again.', 'INVALID_CREDENTIALS');
   }
   const csrfToken = setCsrfCookie(req, res);

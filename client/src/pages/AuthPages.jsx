@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, CalendarCheck, KeyRound, Mail, Phone, ShieldCheck, UserRound, Eye, EyeOff, Check, AlertCircle, ArrowLeft, Clock, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
@@ -95,6 +95,16 @@ export function Login() {
         navigate('/account');
       }
     } catch (e) {
+      if (e.response?.data?.code === 'REGISTRATION_UNVERIFIED') {
+        navigate('/register', {
+          state: {
+            email: values.email,
+            step: 'otp',
+            notice: 'Your account registration is pending verification. Please enter the verification code sent to your email.'
+          }
+        });
+        return;
+      }
       setError(e.response?.data?.message || 'Incorrect email and password. Please try again.');
     }
   }
@@ -111,15 +121,17 @@ export function Login() {
 export function Register() {
   const { requestOtp, verifyOtp, resendOtp } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState('form'); // 'form' | 'otp'
+  const location = useLocation();
+
+  const [step, setStep] = useState(location.state?.step || 'form'); // 'form' | 'otp'
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(location.state?.notice || '');
   const [devCode, setDevCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [otpValue, setOtpValue] = useState('');
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const [cooldown, setCooldown] = useState(0);
-  const [savedEmail, setSavedEmail] = useState('');
+  const [savedEmail, setSavedEmail] = useState(location.state?.email || '');
 
   const { register, handleSubmit, watch, getValues, setValue } = useForm();
   const password = watch('password') || '';
