@@ -21,11 +21,13 @@ export function AuthProvider({ children }) {
   async function login(values) {
     const { data } = await api.post('/auth/login', values);
     setUser(data.data.user);
+    return data.data.user;
   }
 
   async function register(values) {
     const { data } = await api.post('/auth/register', values);
     setUser(data.data.user);
+    return data.data.user;
   }
 
   async function logout() {

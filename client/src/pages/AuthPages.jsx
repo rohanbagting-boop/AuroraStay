@@ -26,7 +26,16 @@ export function Login() {
   const [error, setError] = useState('');
   const { register, handleSubmit } = useForm();
   async function submit(values) {
-    try { await login(values); navigate('/account'); } catch (e) { setError(e.response?.data?.message || 'Incorrect email and password. Please try again.'); }
+    try {
+      const loggedUser = await login(values);
+      if (loggedUser?.role === 'admin' || loggedUser?.role === 'receptionist') {
+        navigate('/dashboard');
+      } else {
+        navigate('/account');
+      }
+    } catch (e) {
+      setError(e.response?.data?.message || 'Incorrect email and password. Please try again.');
+    }
   }
   return (
     <AuthForm eyebrow="Guest access" title="Welcome back" subtitle="Sign in to review your reservations, upcoming stays, and account details." onSubmit={handleSubmit(submit)} error={error}>
