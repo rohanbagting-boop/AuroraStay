@@ -21,8 +21,23 @@ import { dashboardRoutes } from './routes/dashboardRoutes.js';
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-  app.use(cors({ origin: env.clientOrigin.split(',').map((s) => s.trim()), credentials: true }));
+  const explicitOrigins = env.clientOrigin ? env.clientOrigin.split(',').map((s) => s.trim()) : [];
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          explicitOrigins.includes(origin) ||
+          /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin) ||
+          /^http:\/\/localhost(:\d+)?$/.test(origin)
+        ) {
+          return callback(null, true);
+        }
+        callback(null, false);
+      },
+      credentials: true
+    })
+  );
   app.use(compression());
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
