@@ -13,7 +13,7 @@ import {
   signToken
 } from '../utils/security.js';
 import { audit } from '../services/auditService.js';
-import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService.js';
+import { sendOtpEmail, sendPasswordResetEmail, sendPasswordResetOtpEmail } from '../services/emailService.js';
 import { passwordRule } from '../validators/common.js';
 import { env } from '../config/env.js';
 
@@ -232,37 +232,141 @@ export const me = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').toLowerCase().trim();
-  const user = await User.findOne({ email, deletedAt: null }).select('+resetPasswordHash +resetPasswordExpiresAt');
-  if (user) {
-    const token = randomToken();
-    user.resetPasswordHash = hashToken(token);
-    user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
-    await user.save({ validateBeforeSave: false });
-    await audit(req, 'auth.password_reset_requested', 'User', user._id);
-    // Fire-and-forget: respond immediately, send email in background
-    sendPasswordResetEmail(email, token, user.name).catch((err) =>
-      console.error('[ForgotPassword] Email send error:', err.message)
-    );
+  if (!email) throw new AppError(400, 'Please enter your email address.', 'VALIDATION_ERROR');
+
+  const user = await User.findOne({ email, deletedAt: null }).select('+resetPasswordHash +resetPasswordExpiresAt +password');
+  if (!user) {
+    return ok(res, { email, sent: true }, 'If an account exists, a 6-digit code has been sent.');
   }
-  ok(res, null, 'If an account with that email exists, password reset instructions have been sent.');
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  user.resetPasswordHash = hashToken(otp);
+  user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  await audit(req, 'auth.password_reset_code_requested', 'User', user._id);
+
+  let emailResult = { sent: false, devCode: otp };
+  try {
+    emailResult = await withTimeout(
+      sendPasswordResetOtpEmail(email, otp, user.name),
+      8000,
+      { sent: false, devCode: otp, error: 'Email timeout' }
+    );
+  } catch (err) {
+    emailResult = { sent: false, devCode: otp, error: err.message };
+  }
+
+  const responseData = {
+    email,
+    sent: emailResult.sent
+  };
+  if (!emailResult.sent || env.nodeEnv !== 'production' || emailResult.devCode) {
+    responseData.devCode = otp;
+  }
+
+  ok(res, responseData, 'A 6-digit reset code has been sent to your email.');
+});
+
+export const resendResetCode = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').toLowerCase().trim();
+  if (!email) throw new AppError(400, 'Please enter your email address.', 'VALIDATION_ERROR');
+
+  const user = await User.findOne({ email, deletedAt: null }).select('+resetPasswordHash +resetPasswordExpiresAt');
+  if (!user) {
+    return ok(res, { email, sent: true }, 'If an account exists, a 6-digit code has been sent.');
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  user.resetPasswordHash = hashToken(otp);
+  user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  let emailResult = { sent: false, devCode: otp };
+  try {
+    emailResult = await withTimeout(
+      sendPasswordResetOtpEmail(email, otp, user.name),
+      8000,
+      { sent: false, devCode: otp, error: 'Email timeout' }
+    );
+  } catch (err) {
+    emailResult = { sent: false, devCode: otp, error: err.message };
+  }
+
+  const responseData = {
+    email,
+    sent: emailResult.sent
+  };
+  if (!emailResult.sent || env.nodeEnv !== 'production' || emailResult.devCode) {
+    responseData.devCode = otp;
+  }
+
+  ok(res, responseData, 'A new 6-digit code has been sent to your email.');
+});
+
+export const verifyResetCode = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').toLowerCase().trim();
+  const code = String(req.body.code || '').trim();
+
+  if (!email || !code) {
+    throw new AppError(400, 'Email and 6-digit code are required.', 'VALIDATION_ERROR');
+  }
+
+  const user = await User.findOne({
+    email,
+    deletedAt: null
+  }).select('+resetPasswordHash +resetPasswordExpiresAt');
+
+  if (
+    !user ||
+    !user.resetPasswordHash ||
+    user.resetPasswordHash !== hashToken(code) ||
+    !user.resetPasswordExpiresAt ||
+    user.resetPasswordExpiresAt < new Date()
+  ) {
+    throw new AppError(400, 'Invalid or expired 6-digit code. Please request a new one.', 'INVALID_CODE');
+  }
+
+  // Issue temporary single-use reset session token
+  const resetToken = randomToken();
+  user.resetPasswordHash = hashToken(resetToken);
+  user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  ok(res, { resetToken, email }, 'Code verified successfully.');
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  const { token, password } = req.body;
-  if (!token || !password || String(password).length > 128) throw new AppError(400, 'Invalid reset request.', 'INVALID_RESET');
+  const { token, currentPassword, newPassword } = req.body;
+  if (!token || !newPassword || String(newPassword).length > 128) {
+    throw new AppError(400, 'Invalid reset request.', 'INVALID_RESET');
+  }
+
   const user = await User.findOne({
     resetPasswordHash: hashToken(token),
     resetPasswordExpiresAt: { $gt: new Date() },
     deletedAt: null
   }).select('+resetPasswordHash +resetPasswordExpiresAt +password +tokenVersion');
-  if (!user) throw new AppError(400, 'Invalid or expired reset token.', 'INVALID_RESET');
-  user.password = password;
+
+  if (!user) throw new AppError(400, 'Invalid or expired reset session. Please request a new code.', 'INVALID_RESET');
+
+  if (!currentPassword) {
+    throw new AppError(400, 'Please enter your current password.', 'CURRENT_PASSWORD_REQUIRED');
+  }
+
+  const isCurrentMatch = await user.comparePassword(currentPassword);
+  if (!isCurrentMatch) {
+    throw new AppError(400, 'Current password is incorrect.', 'INVALID_CURRENT_PASSWORD');
+  }
+
+  user.password = newPassword;
   user.resetPasswordHash = undefined;
   user.resetPasswordExpiresAt = undefined;
   await user.save();
   req.user = user;
   await audit(req, 'auth.password_reset_completed', 'User', user._id);
-  ok(res, null, 'Password reset complete. Please log in.');
+  ok(res, null, 'Password reset complete. Please log in with your new password.');
 });
 
 export const changePassword = asyncHandler(async (req, res) => {

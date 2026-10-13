@@ -11,9 +11,11 @@ import {
   requestRegistrationOtp,
   resendOtpRules,
   resendRegistrationOtp,
+  resendResetCode,
   resetPassword,
   verifyOtpRules,
-  verifyRegistrationOtp
+  verifyRegistrationOtp,
+  verifyResetCode
 } from '../controllers/authController.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimits.js';
@@ -28,6 +30,8 @@ authRoutes.post('/login', authLimiter, loginRules, validate, login);
 authRoutes.post('/logout', optionalAuth, logout);
 authRoutes.get('/me', requireAuth, me);
 authRoutes.post('/forgot-password', authLimiter, forgotPassword);
+authRoutes.post('/forgot-password/verify-code', authLimiter, verifyResetCode);
+authRoutes.post('/forgot-password/resend-code', authLimiter, resendResetCode);
 authRoutes.post('/reset-password', authLimiter, resetPassword);
 authRoutes.put('/password', requireAuth, changePassword);
 

@@ -180,3 +180,69 @@ export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') 
   console.log(`========================================\n`);
   return { sent: false, devLink: resetUrl };
 }
+
+export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
+  let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
+  if (transporter) {
+    if (!from.includes('@')) {
+      from = `"${from}" <${process.env.SMTP_USER}>`;
+    }
+  } else if (!from.includes('@')) {
+    from = `${from} <onboarding@resend.dev>`;
+  }
+
+  const subject = `${otp} is your Aurora Stay password reset code`;
+  const text = `Hello ${name},\n\nYour Aurora Stay password reset code is: ${otp}. This code expires in 15 minutes.\n\nIf you did not request this, please ignore this email.`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #fffdfa; border: 1px solid #ded7cc; border-radius: 8px; padding: 28px; color: #282523;">
+      <div style="border-bottom: 2px solid #a77b38; padding-bottom: 12px; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #171514; font-size: 22px;">Aurora Stay Hotel</h2>
+        <span style="font-size: 12px; text-transform: uppercase; color: #7a5729; letter-spacing: 1px; font-weight: 600;">Password Reset Code</span>
+      </div>
+      <p style="font-size: 15px; line-height: 1.5; color: #4a453f;">Hello ${name},</p>
+      <p style="font-size: 15px; line-height: 1.5; color: #4a453f;">You requested to reset your password. Use the 6-digit verification code below to proceed:</p>
+      <div style="margin: 24px 0; text-align: center; background: #f7f3ec; border: 1px solid #e5ded3; border-radius: 8px; padding: 18px;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #171514;">${otp}</span>
+        <div style="margin-top: 8px; font-size: 12px; color: #746d64;">Expires in 15 minutes</div>
+      </div>
+      <p style="font-size: 13px; line-height: 1.5; color: #746d64;">
+        For your security, never share this code with anyone. If you didn't request a password reset, you can safely disregard this message.
+      </p>
+      <div style="margin-top: 24px; border-top: 1px solid #ded7cc; padding-top: 14px; font-size: 12px; color: #9a9186;">
+        Aurora Stay Hotel &bull; Ayala Avenue, Makati City &bull; +63 2 8555 0188
+      </div>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({ from, to: email, subject, html, text });
+      console.log(`[SMTP] Password reset OTP sent to ${email}`);
+      return { sent: true };
+    } catch (err) {
+      console.error('Failed to send password reset OTP via SMTP:', err.message);
+      return { sent: false, devCode: otp, error: err.message };
+    }
+  }
+
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({ from, to: email, subject, html, text });
+      if (response.error) {
+        console.error('[Resend Error]', response.error);
+        return { sent: false, devCode: otp, error: response.error.message };
+      }
+      console.log(`[Resend] Password reset OTP sent to ${email}`);
+      return { sent: true };
+    } catch (err) {
+      console.error('Failed to send password reset OTP via Resend:', err.message);
+      return { sent: false, devCode: otp, error: err.message };
+    }
+  }
+
+  // Dev fallback
+  console.log(`\n========================================`);
+  console.log(`[AURORA STAY RESET OTP] Code for ${email}: ${otp}`);
+  console.log(`========================================\n`);
+  return { sent: false, devCode: otp };
+}

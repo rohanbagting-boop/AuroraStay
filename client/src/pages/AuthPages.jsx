@@ -411,19 +411,45 @@ export function Register() {
 }
 
 export function ForgotPassword() {
-  const [sent, setSent] = useState(false);
-  const [sentEmail, setSentEmail] = useState('');
+  const navigate = useNavigate();
+  const [step, setStep] = useState('email'); // 'email' | 'otp'
+  const [email, setEmail] = useState('');
+  const [otpValue, setOtpValue] = useState('');
+  const [devCode, setDevCode] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const [remainingAttempts, setRemainingAttempts] = useState(5);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register, handleSubmit, getValues } = useForm();
+  const { register, handleSubmit } = useForm();
 
-  async function submit(values) {
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  async function onRequestCode(values) {
+    const cleanEmail = (values.email || '').toLowerCase().trim();
+    if (!cleanEmail) {
+      setError('Please enter your email address.');
+      return;
+    }
     setLoading(true);
     setError('');
+    setNotice('');
     try {
-      await api.post('/auth/forgot-password', values);
-      setSentEmail(values.email);
-      setSent(true);
+      const res = await api.post('/auth/forgot-password', { email: cleanEmail });
+      setEmail(cleanEmail);
+      setStep('otp');
+      setCooldown(60);
+      setRemainingAttempts(5);
+      if (res.data?.data?.devCode) {
+        setDevCode(res.data.data.devCode);
+      }
+      setNotice('A 6-digit verification code has been sent.');
     } catch (e) {
       setError(e.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
@@ -431,50 +457,220 @@ export function ForgotPassword() {
     }
   }
 
-  if (sent) {
+  async function onVerifyCode(e) {
+    e.preventDefault();
+    const cleanOtp = otpValue.trim();
+    if (cleanOtp.length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/auth/forgot-password/verify-code', { email, code: cleanOtp });
+      const resetToken = res.data?.data?.resetToken;
+      navigate(`/reset-password?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(email)}`);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Invalid or expired 6-digit code.');
+      setRemainingAttempts((prev) => Math.max(0, prev - 1));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onResendCode() {
+    if (cooldown > 0 || loading) return;
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api.post('/auth/forgot-password/resend-code', { email });
+      setCooldown(60);
+      setRemainingAttempts(5);
+      if (res.data?.data?.devCode) {
+        setDevCode(res.data.data.devCode);
+      }
+      setNotice('A new 6-digit code has been sent.');
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to resend code.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (step === 'otp') {
     return (
-      <AuthForm eyebrow="Account recovery" title="Check your inbox" subtitle="We sent password reset instructions to your email address.">
-        <div style={{ textAlign: 'center', padding: '0.5rem 0 1rem' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#f7f3ec', border: '1px solid #e5ded3', borderRadius: '8px', padding: '10px 18px', fontSize: '0.92rem', color: '#4a453f', marginBottom: '0.5rem' }}>
-            <Mail size={16} style={{ color: '#a77b38', flexShrink: 0 }} />
-            <span>{sentEmail}</span>
+      <AuthForm
+        eyebrow="Account recovery"
+        title="Enter verification code"
+        subtitle={`We sent a 6-digit code to ${email}. Enter it below to proceed.`}
+        onSubmit={onVerifyCode}
+        error={error}
+        message={notice}
+      >
+        <div className="otpFormBody">
+          <div className="otpInputWrap">
+            <input
+              type="text"
+              className="otpInputField"
+              placeholder="000000"
+              value={otpValue}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                setOtpValue(digits);
+              }}
+              maxLength={6}
+              autoFocus
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+            />
           </div>
-          <p style={{ fontSize: '0.84rem', color: 'var(--muted)', marginTop: '0.75rem', lineHeight: 1.5 }}>
-            The link expires in 30 minutes. Check your spam folder if you don't see it.
-          </p>
+
+          <div className="otpMetaRow">
+            <span className="otpAttemptsBadge">
+              <AlertCircle size={14} />
+              {remainingAttempts} {remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining
+            </span>
+            <button
+              type="button"
+              className="otpResendBtn"
+              disabled={cooldown > 0 || loading}
+              onClick={onResendCode}
+            >
+              {cooldown > 0 ? (
+                <>
+                  <Clock size={14} /> Resend in {cooldown}s
+                </>
+              ) : (
+                <>
+                  <RotateCcw size={14} /> Resend code
+                </>
+              )}
+            </button>
+          </div>
+
+          {devCode && (
+            <div className="otpDevNotice">
+              <span>Preview code: <strong>{devCode}</strong></span>
+              <button
+                type="button"
+                className="subtleButton"
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                onClick={() => setOtpValue(devCode)}
+              >
+                Auto-fill
+              </button>
+            </div>
+          )}
+
+          <button className="authSubmit" disabled={loading || otpValue.length !== 6}>
+            {loading ? 'Verifying code...' : 'Continue to reset password'} <ArrowRight size={18} />
+          </button>
+
+          <div className="authLinks single">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email');
+                setError('');
+                setNotice('');
+                setOtpValue('');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.86rem',
+                fontWeight: 600,
+                padding: '0.4rem 0'
+              }}
+            >
+              <ArrowLeft size={16} /> Edit email address
+            </button>
+          </div>
         </div>
-        <div className="authLinks single"><Link to="/login">Return to sign in</Link></div>
       </AuthForm>
     );
   }
 
   return (
-    <AuthForm eyebrow="Account recovery" title="Reset your password" subtitle="Enter the email linked to your guest account and we will send reset instructions." onSubmit={handleSubmit(submit)} error={error}>
-      <label><span>Email address</span><div className="authField"><Mail size={18} /><input placeholder="you@example.com" {...register('email')} /></div></label>
-      <button className="authSubmit" disabled={loading}>{loading ? 'Sending...' : 'Send reset instructions'} <ArrowRight size={18} /></button>
-      <div className="authLinks single"><Link to="/login">Return to sign in</Link></div>
+    <AuthForm
+      eyebrow="Account recovery"
+      title="Reset your password"
+      subtitle="Enter the email associated with your account and we will send a 6-digit code."
+      onSubmit={handleSubmit(onRequestCode)}
+      error={error}
+      message={notice}
+    >
+      <label>
+        <span>Email address</span>
+        <div className="authField">
+          <Mail size={18} />
+          <input placeholder="you@example.com" {...register('email')} />
+        </div>
+      </label>
+      <button className="authSubmit" disabled={loading}>
+        {loading ? 'Sending code...' : 'Send verification code'} <ArrowRight size={18} />
+      </button>
+      <div className="authLinks single">
+        <Link to="/login">Return to sign in</Link>
+      </div>
     </AuthForm>
   );
 }
 
 export function ResetPassword() {
   const navigate = useNavigate();
-  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const searchParams = new URLSearchParams(window.location.search);
+  const token = searchParams.get('token') || '';
+  const email = searchParams.get('email') || '';
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const { register, handleSubmit, watch } = useForm();
-  const password = watch('password') || '';
+  const newPassword = watch('newPassword') || '';
 
   async function submit(values) {
+    if (!values.currentPassword) {
+      setError('Please enter your current password.');
+      return;
+    }
+    if (!values.newPassword) {
+      setError('Please enter your new password.');
+      return;
+    }
+    if (values.newPassword !== values.confirmPassword) {
+      setError('New passwords do not match. Please re-enter.');
+      return;
+    }
+
+    const isLengthValid = values.newPassword.length >= 8;
+    const hasLower = /[a-z]/.test(values.newPassword);
+    const hasUpper = /[A-Z]/.test(values.newPassword);
+    const hasNumber = /[0-9]/.test(values.newPassword);
+    if (!isLengthValid || !hasLower || !hasUpper || !hasNumber) {
+      setError('New password must satisfy all security requirements.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/reset-password', { token, password: values.password });
+      await api.post('/auth/reset-password', {
+        token,
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword
+      });
       setDone(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to reset password. The link may have expired.');
+      setError(e.response?.data?.message || 'Failed to reset password. Please check your current password.');
     } finally {
       setLoading(false);
     }
@@ -482,8 +678,8 @@ export function ResetPassword() {
 
   if (!token) {
     return (
-      <AuthForm eyebrow="Account recovery" title="Invalid link" subtitle="This password reset link is invalid or has already been used.">
-        <div className="authLinks single"><Link to="/forgot-password">Request a new link</Link></div>
+      <AuthForm eyebrow="Account recovery" title="Invalid session" subtitle="Please verify your 6-digit code first to reset your password.">
+        <div className="authLinks single"><Link to="/forgot-password">Request verification code</Link></div>
       </AuthForm>
     );
   }
@@ -497,14 +693,37 @@ export function ResetPassword() {
   }
 
   return (
-    <AuthForm eyebrow="Account recovery" title="Choose a new password" subtitle="Enter a strong new password for your Aurora Stay account." onSubmit={handleSubmit(submit)} error={error}>
+    <AuthForm
+      eyebrow="Account recovery"
+      title="Reset your password"
+      subtitle={email ? `Set a new password for ${email}` : 'Enter your current password and choose a new password.'}
+      onSubmit={handleSubmit(submit)}
+      error={error}
+    >
+      <label>
+        <span>Current password</span>
+        <PasswordInput placeholder="Enter your current password" registerObj={register('currentPassword')} />
+      </label>
+
       <label>
         <span>New password</span>
-        <PasswordInput placeholder="Create a strong password" registerObj={register('password')} />
+        <PasswordInput placeholder="Create a strong new password" registerObj={register('newPassword')} />
       </label>
-      <PasswordRequirements password={password} />
-      <button className="authSubmit" disabled={loading}>{loading ? 'Saving...' : 'Set new password'} <ArrowRight size={18} /></button>
-      <div className="authLinks single"><Link to="/forgot-password">Request a new link</Link></div>
+
+      <PasswordRequirements password={newPassword} />
+
+      <label>
+        <span>Confirm new password</span>
+        <PasswordInput placeholder="Re-enter your new password" registerObj={register('confirmPassword')} />
+      </label>
+
+      <button className="authSubmit" disabled={loading}>
+        {loading ? 'Updating password...' : 'Update password'} <ArrowRight size={18} />
+      </button>
+
+      <div className="authLinks single">
+        <Link to="/forgot-password">Request a new code</Link>
+      </div>
     </AuthForm>
   );
 }
