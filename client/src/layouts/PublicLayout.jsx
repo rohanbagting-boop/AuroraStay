@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { CalendarDays, ChevronRight, Clock, LogOut, Phone, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Logo } from '../components/Logo.jsx';
+import { ConfirmModal } from '../components/ConfirmModal.jsx';
 
 export default function PublicLayout() {
   const { user, logout } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   return (
     <>
       <div className="utilityBar">
@@ -26,7 +29,7 @@ export default function PublicLayout() {
             <>
               <NavLink className="accountLink" to="/account"><CalendarDays size={17} /> Account</NavLink>
               {(user.role === 'admin' || user.role === 'receptionist') && <NavLink className="dashboardLink" to="/dashboard">Dashboard <ChevronRight size={16} /></NavLink>}
-              <button className="iconButton" onClick={logout} title="Logout" aria-label="Logout"><LogOut size={18} /></button>
+              <button className="iconButton" onClick={() => setShowLogoutModal(true)} title="Logout" aria-label="Logout"><LogOut size={18} /></button>
             </>
           ) : (
             <>
@@ -36,6 +39,17 @@ export default function PublicLayout() {
           )}
         </div>
       </header>
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={() => {
+          setShowLogoutModal(false);
+          logout();
+        }}
+        title="Confirm Sign Out"
+        message="Are you sure you want to log out of Aurora Stay? You will need to sign in again to view your bookings."
+        confirmText="Sign out"
+      />
       <Outlet />
       <footer className="footer">
         <strong>Aurora Stay Hotel</strong>
