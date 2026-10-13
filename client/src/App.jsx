@@ -7,7 +7,7 @@ import Home from './pages/Home.jsx';
 import Rooms from './pages/Rooms.jsx';
 import RoomDetails from './pages/RoomDetails.jsx';
 import Account from './pages/Account.jsx';
-import { ForgotPassword, Login, Register } from './pages/AuthPages.jsx';
+import { ForgotPassword, Login, Register, ResetPassword } from './pages/AuthPages.jsx';
 import { About, Contact, FAQ, NotFound, Privacy, Terms } from './pages/StaticPages.jsx';
 import { DashboardHome, PaymentsAdmin, ReservationsAdmin, RoomsAdmin, SettingsAdmin, UsersAdmin } from './pages/Dashboard.jsx';
 
@@ -21,6 +21,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />

@@ -125,7 +125,6 @@ export function Register() {
 
   const [step, setStep] = useState(location.state?.step || 'form'); // 'form' | 'otp'
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState(location.state?.notice || '');
   const [devCode, setDevCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [otpValue, setOtpValue] = useState('');
@@ -168,7 +167,6 @@ export function Register() {
 
     setLoading(true);
     setError('');
-    setNotice('');
     try {
       const res = await requestOtp(values);
       setSavedEmail(values.email);
@@ -178,7 +176,6 @@ export function Register() {
       if (res.data?.developmentOtp) {
         setDevCode(res.data.developmentOtp);
       }
-      setNotice(res.message || 'Verification code sent to your email.');
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to send verification code. Please check your details.');
     } finally {
@@ -219,7 +216,6 @@ export function Register() {
       if (res.data?.developmentOtp) {
         setDevCode(res.data.developmentOtp);
       }
-      setNotice('A new verification code has been sent to your email.');
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to resend code.');
     } finally {
@@ -235,7 +231,6 @@ export function Register() {
         subtitle="Enter the 6-digit code sent to your email to verify and complete your guest account."
         onSubmit={onVerifySubmit}
         error={error}
-        message={notice}
       >
         <div style={{ display: 'grid', gap: '0.85rem' }}>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -416,14 +411,100 @@ export function Register() {
 }
 
 export function ForgotPassword() {
-  const [message, setMessage] = useState('');
-  const { register, handleSubmit } = useForm();
-  async function submit(values) { const { data } = await api.post('/auth/forgot-password', values); setMessage(data.data?.developmentResetToken ? `Temporary reset code: ${data.data.developmentResetToken}` : data.message); }
+  const [sent, setSent] = useState(false);
+  const [sentEmail, setSentEmail] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { register, handleSubmit, getValues } = useForm();
+
+  async function submit(values) {
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/auth/forgot-password', values);
+      setSentEmail(values.email);
+      setSent(true);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <AuthForm eyebrow="Account recovery" title="Check your inbox" subtitle="We sent password reset instructions to your email address.">
+        <div style={{ textAlign: 'center', padding: '0.5rem 0 1rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#f7f3ec', border: '1px solid #e5ded3', borderRadius: '8px', padding: '10px 18px', fontSize: '0.92rem', color: '#4a453f', marginBottom: '0.5rem' }}>
+            <Mail size={16} style={{ color: '#a77b38', flexShrink: 0 }} />
+            <span>{sentEmail}</span>
+          </div>
+          <p style={{ fontSize: '0.84rem', color: 'var(--muted)', marginTop: '0.75rem', lineHeight: 1.5 }}>
+            The link expires in 30 minutes. Check your spam folder if you don't see it.
+          </p>
+        </div>
+        <div className="authLinks single"><Link to="/login">Return to sign in</Link></div>
+      </AuthForm>
+    );
+  }
+
   return (
-    <AuthForm eyebrow="Account recovery" title="Reset your password" subtitle="Enter the email linked to your guest account and we will prepare reset instructions." onSubmit={handleSubmit(submit)} message={message}>
+    <AuthForm eyebrow="Account recovery" title="Reset your password" subtitle="Enter the email linked to your guest account and we will send reset instructions." onSubmit={handleSubmit(submit)} error={error}>
       <label><span>Email address</span><div className="authField"><Mail size={18} /><input placeholder="you@example.com" {...register('email')} /></div></label>
-      <button className="authSubmit">Send reset instructions <ArrowRight size={18} /></button>
+      <button className="authSubmit" disabled={loading}>{loading ? 'Sending...' : 'Send reset instructions'} <ArrowRight size={18} /></button>
       <div className="authLinks single"><Link to="/login">Return to sign in</Link></div>
+    </AuthForm>
+  );
+}
+
+export function ResetPassword() {
+  const navigate = useNavigate();
+  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const { register, handleSubmit, watch } = useForm();
+  const password = watch('password') || '';
+
+  async function submit(values) {
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/auth/reset-password', { token, password: values.password });
+      setDone(true);
+      setTimeout(() => navigate('/login'), 2500);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to reset password. The link may have expired.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <AuthForm eyebrow="Account recovery" title="Invalid link" subtitle="This password reset link is invalid or has already been used.">
+        <div className="authLinks single"><Link to="/forgot-password">Request a new link</Link></div>
+      </AuthForm>
+    );
+  }
+
+  if (done) {
+    return (
+      <AuthForm eyebrow="Account recovery" title="Password updated!" subtitle="Your password has been changed successfully. Redirecting you to sign in…">
+        <div className="authLinks single"><Link to="/login">Sign in now</Link></div>
+      </AuthForm>
+    );
+  }
+
+  return (
+    <AuthForm eyebrow="Account recovery" title="Choose a new password" subtitle="Enter a strong new password for your Aurora Stay account." onSubmit={handleSubmit(submit)} error={error}>
+      <label>
+        <span>New password</span>
+        <PasswordInput placeholder="Create a strong password" registerObj={register('password')} />
+      </label>
+      <PasswordRequirements password={password} />
+      <button className="authSubmit" disabled={loading}>{loading ? 'Saving...' : 'Set new password'} <ArrowRight size={18} /></button>
+      <div className="authLinks single"><Link to="/forgot-password">Request a new link</Link></div>
     </AuthForm>
   );
 }

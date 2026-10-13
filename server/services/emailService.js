@@ -31,11 +31,14 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
-  const defaultFrom = transporter
-    ? (process.env.EMAIL_FROM || `"Aurora Stay Hotel" <${process.env.SMTP_USER}>`)
-    : (process.env.EMAIL_FROM || 'Aurora Stay Hotel <onboarding@resend.dev>');
-
-  const from = defaultFrom;
+  let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
+  if (transporter) {
+    if (!from.includes('@')) {
+      from = `"${from}" <${process.env.SMTP_USER}>`;
+    }
+  } else if (!from.includes('@')) {
+    from = `${from} <onboarding@resend.dev>`;
+  }
   const subject = `${otp} is your Aurora Stay verification code`;
   const text = `Your Aurora Stay verification code is: ${otp}. This code expires in 10 minutes.`;
   const html = `
@@ -107,4 +110,73 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
   console.log(`========================================\n`);
 
   return { sent: false, devCode: otp };
+}
+
+export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') {
+  const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+  const resetUrl = `${clientOrigin}/reset-password?token=${resetToken}`;
+
+  let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
+  if (transporter) {
+    if (!from.includes('@')) {
+      from = `"${from}" <${process.env.SMTP_USER}>`;
+    }
+  } else if (!from.includes('@')) {
+    from = `${from} <onboarding@resend.dev>`;
+  }
+
+  const subject = 'Reset your Aurora Stay password';
+  const text = `Hello ${name},\n\nYou requested a password reset for your Aurora Stay account.\n\nClick the link below to reset your password (expires in 30 minutes):\n${resetUrl}\n\nIf you did not request this, please ignore this email.`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #fffdfa; border: 1px solid #ded7cc; border-radius: 8px; padding: 28px; color: #282523;">
+      <div style="border-bottom: 2px solid #a77b38; padding-bottom: 12px; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #171514; font-size: 22px;">Aurora Stay Hotel</h2>
+        <span style="font-size: 12px; text-transform: uppercase; color: #7a5729; letter-spacing: 1px; font-weight: 600;">Password Reset</span>
+      </div>
+      <p style="font-size: 15px; line-height: 1.5; color: #4a453f;">Hello ${name},</p>
+      <p style="font-size: 15px; line-height: 1.5; color: #4a453f;">You requested a password reset for your Aurora Stay account. Click the button below to choose a new password. This link expires in <strong>30 minutes</strong>.</p>
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${resetUrl}" style="display: inline-block; background: #171514; color: #fff; text-decoration: none; padding: 13px 32px; border-radius: 6px; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">Reset my password &rarr;</a>
+      </div>
+      <p style="font-size: 13px; line-height: 1.5; color: #746d64;">If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="font-size: 12px; color: #a77b38; word-break: break-all;">${resetUrl}</p>
+      <p style="font-size: 13px; line-height: 1.5; color: #746d64;">If you didn't request a password reset, you can safely ignore this email &mdash; your password will remain unchanged.</p>
+      <div style="margin-top: 24px; border-top: 1px solid #ded7cc; padding-top: 14px; font-size: 12px; color: #9a9186;">
+        Aurora Stay Hotel &bull; Ayala Avenue, Makati City &bull; +63 2 8555 0188
+      </div>
+    </div>
+  `;
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({ from, to: email, subject, html, text });
+      console.log(`[SMTP] Password reset email sent to ${email}`);
+      return { sent: true };
+    } catch (err) {
+      console.error('Failed to send password reset email via SMTP:', err.message);
+      return { sent: false, error: err.message };
+    }
+  }
+
+  if (resendClient) {
+    try {
+      const response = await resendClient.emails.send({ from, to: email, subject, html, text });
+      if (response.error) {
+        console.error('[Resend Error]', response.error);
+        return { sent: false, error: response.error.message };
+      }
+      console.log(`[Resend] Password reset email sent to ${email}`);
+      return { sent: true };
+    } catch (err) {
+      console.error('Failed to send password reset email via Resend:', err.message);
+      return { sent: false, error: err.message };
+    }
+  }
+
+  // Dev fallback
+  console.log(`\n========================================`);
+  console.log(`[AURORA STAY RESET] Password reset for: ${email}`);
+  console.log(`[AURORA STAY RESET] Link: ${resetUrl}`);
+  console.log(`========================================\n`);
+  return { sent: false, devLink: resetUrl };
 }

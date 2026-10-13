@@ -5,7 +5,7 @@ import { AppError, ok, created } from '../utils/http.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { clearAuthCookie, hashToken, randomToken, setAuthCookie, setCsrfCookie, signToken } from '../utils/security.js';
 import { audit } from '../services/auditService.js';
-import { sendOtpEmail } from '../services/emailService.js';
+import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { passwordRule } from '../validators/common.js';
 import { env } from '../config/env.js';
 
@@ -67,14 +67,9 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await sendOtpEmail(email, otp, name);
 
-  let message = 'Verification code sent to your email.';
-  if (!emailResult.sent && emailResult.error) {
-    if (emailResult.error.includes('only send testing emails to your own email address')) {
-      message = 'Resend free tier only delivers to your Resend account email (keinweighart@gmail.com). Use the code below or register with that email.';
-    } else {
-      message = 'Email notice: Use the verification code below to verify your account.';
-    }
-  }
+  const message = emailResult.sent
+    ? 'Verification code sent to your email.'
+    : 'Could not send email. Use the verification code shown below to complete registration.';
 
   ok(
     res,
@@ -146,14 +141,9 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await sendOtpEmail(email, otp, record.registrationData?.name);
 
-  let message = 'A new verification code has been sent to your email.';
-  if (!emailResult.sent && emailResult.error) {
-    if (emailResult.error.includes('only send testing emails to your own email address')) {
-      message = 'Resend free tier only delivers to your Resend account email (keinweighart@gmail.com). Use the code below or register with that email.';
-    } else {
-      message = 'Email notice: Use the verification code below to verify your account.';
-    }
-  }
+  const message = emailResult.sent
+    ? 'A new verification code has been sent to your email.'
+    : 'Could not send email. Use the verification code shown below to complete registration.';
 
   ok(
     res,
@@ -220,11 +210,9 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
     await audit(req, 'auth.password_reset_requested', 'User', user._id);
-    if (process.env.NODE_ENV !== 'production') {
-      return ok(res, { developmentResetToken: token }, 'If the account exists, password reset instructions will be sent.');
-    }
+    await sendPasswordResetEmail(email, token, user.name);
   }
-  ok(res, null, 'If the account exists, password reset instructions will be sent.');
+  ok(res, null, 'If an account with that email exists, password reset instructions have been sent.');
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
