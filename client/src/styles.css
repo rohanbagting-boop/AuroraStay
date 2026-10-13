@@ -157,6 +157,112 @@ img { max-width: 100%; display: block; }
 .authLinks.single { justify-content: center; }
 .authNotice { margin: 0; padding: .8rem; border-radius: 6px; background: #f9f4ea; }
 
+.passwordValidationBox {
+  margin-top: -0.25rem;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 253, 249, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  box-shadow: 0 2px 8px rgba(40, 37, 35, 0.04);
+}
+
+.passwordStrengthHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.passwordStrengthHeader strong {
+  text-transform: capitalize;
+  font-weight: 700;
+}
+
+.passwordStrengthHeader strong.strength-weak { color: var(--red); }
+.passwordStrengthHeader strong.strength-fair { color: #c9822b; }
+.passwordStrengthHeader strong.strength-good { color: var(--gold-dark); }
+.passwordStrengthHeader strong.strength-strong { color: var(--green); }
+
+.passwordMeter {
+  display: flex;
+  gap: 5px;
+  width: 100%;
+}
+
+.passwordMeterBar {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: #e6dfd5;
+  transition: background-color 0.22s ease;
+}
+
+.passwordMeterBar.fill-weak { background: var(--red); }
+.passwordMeterBar.fill-fair { background: #c9822b; }
+.passwordMeterBar.fill-good { background: var(--gold-dark); }
+.passwordMeterBar.fill-strong { background: var(--green); }
+
+.passwordValidationList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .passwordValidationList {
+    grid-template-columns: 1fr;
+  }
+}
+
+.passwordValidationItem {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: color 0.18s ease;
+  user-select: none;
+}
+
+.passwordValidationItem.valid {
+  color: #1f5338;
+  font-weight: 600;
+}
+
+.passwordValidationIcon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #ece5dc;
+  color: #8c8378;
+  transition: all 0.2s ease;
+}
+
+.passwordValidationItem.valid .passwordValidationIcon {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.passwordValidationBullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #8c8378;
+}
+
 .pageTitleRow, .dashTitle { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 1.25rem; }
 .pageTitleRow h1, .dashTitle h1 { margin: 0; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.05rem); line-height: 1.08; letter-spacing: -.02em; }
 .pageTitleRow p, .dashTitle p { margin: .45rem 0 0; color: var(--muted); line-height: 1.6; max-width: 680px; }
