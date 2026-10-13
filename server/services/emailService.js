@@ -60,12 +60,14 @@ export async function sendOtpEmail(email, otp, name = 'Guest') {
       });
       if (response.error) {
         console.error('[Resend Error]', response.error);
+        return { sent: false, devCode: otp, error: response.error.message };
       } else {
         console.log(`[Resend] OTP email successfully sent to ${email} (ID: ${response.data?.id})`);
         return { sent: true };
       }
     } catch (err) {
       console.error('Failed to send OTP email via Resend API:', err.message);
+      return { sent: false, devCode: otp, error: err.message };
     }
   }
 

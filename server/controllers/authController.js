@@ -67,6 +67,15 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await sendOtpEmail(email, otp, name);
 
+  let message = 'Verification code sent to your email.';
+  if (!emailResult.sent && emailResult.error) {
+    if (emailResult.error.includes('only send testing emails to your own email address')) {
+      message = 'Resend free tier only delivers to your Resend account email (keinweighart@gmail.com). Use the code below or register with that email.';
+    } else {
+      message = 'Email notice: Use the verification code below to verify your account.';
+    }
+  }
+
   ok(
     res,
     {
@@ -76,7 +85,7 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
       maxAttempts: 5,
       ...(process.env.NODE_ENV === 'test' || !env.emailConfigured || !emailResult.sent ? { developmentOtp: otp } : {})
     },
-    'Verification code sent to your email.'
+    message
   );
 });
 
@@ -137,6 +146,15 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
 
   const emailResult = await sendOtpEmail(email, otp, record.registrationData?.name);
 
+  let message = 'A new verification code has been sent to your email.';
+  if (!emailResult.sent && emailResult.error) {
+    if (emailResult.error.includes('only send testing emails to your own email address')) {
+      message = 'Resend free tier only delivers to your Resend account email (keinweighart@gmail.com). Use the code below or register with that email.';
+    } else {
+      message = 'Email notice: Use the verification code below to verify your account.';
+    }
+  }
+
   ok(
     res,
     {
@@ -146,7 +164,7 @@ export const resendRegistrationOtp = asyncHandler(async (req, res) => {
       maxAttempts: record.maxAttempts,
       ...(process.env.NODE_ENV === 'test' || !env.emailConfigured || !emailResult.sent ? { developmentOtp: otp } : {})
     },
-    'A new verification code has been sent to your email.'
+    message
   );
 });
 
