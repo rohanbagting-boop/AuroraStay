@@ -4,6 +4,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
+    "build": "echo 'No build step required for server'",
     "dev": "node --watch server.js",
     "start": "node server.js",
     "seed": "node scripts/seed.js",
