@@ -23,7 +23,33 @@ export function setAuthCookie(res, token) {
 }
 
 export function clearAuthCookie(res) {
-  res.clearCookie(authCookieName, { path: '/' });
+  const options = {
+    httpOnly: true,
+    secure: env.cookieSecure,
+    sameSite: env.cookieSameSite,
+    path: '/'
+  };
+  res.clearCookie(authCookieName, options);
+  res.cookie(authCookieName, '', {
+    ...options,
+    expires: new Date(0),
+    maxAge: 0
+  });
+}
+
+export function clearCsrfCookie(res) {
+  const options = {
+    httpOnly: false,
+    secure: env.cookieSecure,
+    sameSite: env.cookieSameSite,
+    path: '/'
+  };
+  res.clearCookie(csrfCookieName, options);
+  res.cookie(csrfCookieName, '', {
+    ...options,
+    expires: new Date(0),
+    maxAge: 0
+  });
 }
 
 export function setCsrfCookie(req, res) {

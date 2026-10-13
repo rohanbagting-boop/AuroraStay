@@ -23,6 +23,20 @@ export async function requireAuth(req, _res, next) {
   }
 }
 
+export async function optionalAuth(req, _res, next) {
+  try {
+    const bearer = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
+    const token = req.cookies?.[authCookieName] || bearer;
+    if (!token) return next();
+    const payload = jwt.verify(token, env.jwtSecret);
+    const user = await User.findById(payload.sub).select('+tokenVersion +passwordChangedAt');
+    if (user && user.isActive && !user.deletedAt && (user.tokenVersion || 0) === payload.tokenVersion) {
+      req.user = user;
+    }
+  } catch {}
+  next();
+}
+
 export const allowRoles = (...roles) => (req, _res, next) => {
   if (!req.user) return next(new AppError(401, 'Authentication required.', 'AUTH_REQUIRED'));
   if (!roles.includes(req.user.role)) return next(new AppError(403, 'You do not have permission to perform this action.', 'FORBIDDEN'));

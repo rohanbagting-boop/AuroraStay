@@ -3,7 +3,15 @@ import { User } from '../models/User.js';
 import { OtpVerification } from '../models/OtpVerification.js';
 import { AppError, ok, created } from '../utils/http.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { clearAuthCookie, hashToken, randomToken, setAuthCookie, setCsrfCookie, signToken } from '../utils/security.js';
+import {
+  clearAuthCookie,
+  clearCsrfCookie,
+  hashToken,
+  randomToken,
+  setAuthCookie,
+  setCsrfCookie,
+  signToken
+} from '../utils/security.js';
 import { audit } from '../services/auditService.js';
 import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { passwordRule } from '../validators/common.js';
@@ -207,7 +215,13 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const logout = asyncHandler(async (req, res) => {
+  if (req.user?._id) {
+    try {
+      await audit(req, 'auth.logout', 'User', req.user._id);
+    } catch {}
+  }
   clearAuthCookie(res);
+  clearCsrfCookie(res);
   ok(res, null, 'Logged out.');
 });
 

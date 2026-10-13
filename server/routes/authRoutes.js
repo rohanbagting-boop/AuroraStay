@@ -15,7 +15,7 @@ import {
   verifyOtpRules,
   verifyRegistrationOtp
 } from '../controllers/authController.js';
-import { requireAuth } from '../middleware/auth.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimits.js';
 import { validate } from '../middleware/validate.js';
 
@@ -25,7 +25,7 @@ authRoutes.post('/register/request-otp', authLimiter, registerRules, validate, r
 authRoutes.post('/register/verify-otp', authLimiter, verifyOtpRules, validate, verifyRegistrationOtp);
 authRoutes.post('/register/resend-otp', authLimiter, resendOtpRules, validate, resendRegistrationOtp);
 authRoutes.post('/login', authLimiter, loginRules, validate, login);
-authRoutes.post('/logout', requireAuth, logout);
+authRoutes.post('/logout', optionalAuth, logout);
 authRoutes.get('/me', requireAuth, me);
 authRoutes.post('/forgot-password', authLimiter, forgotPassword);
 authRoutes.post('/reset-password', authLimiter, resetPassword);

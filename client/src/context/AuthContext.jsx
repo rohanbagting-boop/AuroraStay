@@ -61,6 +61,7 @@ export function AuthProvider({ children }) {
       console.warn('Logout API failed, but clearing local state.', e);
     } finally {
       setUser(null);
+      setMemoryCsrf('');
     }
   }
 

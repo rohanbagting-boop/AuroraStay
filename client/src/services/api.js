@@ -3,12 +3,14 @@ import axios from 'axios';
 let memoryCsrfToken = (typeof localStorage !== 'undefined' && localStorage.getItem('hotel_csrf_token')) || '';
 
 export function setMemoryCsrf(token) {
-  if (token) {
-    memoryCsrfToken = token;
-    try {
+  memoryCsrfToken = token || '';
+  try {
+    if (token) {
       localStorage.setItem('hotel_csrf_token', token);
-    } catch {}
-  }
+    } else {
+      localStorage.removeItem('hotel_csrf_token');
+    }
+  } catch {}
 }
 
 export const api = axios.create({
