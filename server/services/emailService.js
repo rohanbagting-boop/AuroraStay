@@ -2,22 +2,28 @@ import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
-let transporter = null;
 let resendClient = null;
 
 if (process.env.RESEND_API_KEY) {
   resendClient = new Resend(process.env.RESEND_API_KEY);
 }
 
-if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+const smtpEnabled =
+  process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+
+/**
+ * Creates a fresh SMTP transporter on every call.
+ * Avoids stale connection-pool issues on Render / containerized deployments.
+ */
+function createSmtpTransporter() {
+  if (!smtpEnabled) return null;
   const isGmail = process.env.SMTP_HOST.toLowerCase().includes('gmail');
-  transporter = nodemailer.createTransport(
+  return nodemailer.createTransport(
     isGmail
       ? {
           service: 'gmail',
-          connectionTimeout: 5000,
-          greetingTimeout: 5000,
-          socketTimeout: 5000,
+          socketTimeout: 15000,
+          connectionTimeout: 10000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS.replace(/\s+/g, '')
@@ -27,9 +33,8 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
           host: process.env.SMTP_HOST,
           port: Number(process.env.SMTP_PORT || 587),
           secure: Number(process.env.SMTP_PORT) === 465,
-          connectionTimeout: 5000,
-          greetingTimeout: 5000,
-          socketTimeout: 5000,
+          socketTimeout: 15000,
+          connectionTimeout: 10000,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
@@ -39,20 +44,9 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 }
 
 export async function sendOtpEmail(email, otp, name = 'Guest') {
-  return Promise.race([
-    executeSendOtpEmail(email, otp, name),
-    new Promise((resolve) =>
-      setTimeout(() => {
-        console.warn(`[OTP Timeout] Email send to ${email} timed out after 5s. Returning fallback code.`);
-        resolve({ sent: false, devCode: otp, error: 'Email delivery timed out' });
-      }, 5000)
-    )
-  ]);
-}
-
-async function executeSendOtpEmail(email, otp, name = 'Guest') {
+  const transporter = createSmtpTransporter();
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
-  if (transporter) {
+  if (smtpEnabled) {
     if (!from.includes('@')) {
       from = `"${from}" <${process.env.SMTP_USER}>`;
     }
@@ -130,11 +124,12 @@ async function executeSendOtpEmail(email, otp, name = 'Guest') {
 }
 
 export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') {
+  const transporter = createSmtpTransporter();
   const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
   const resetUrl = `${clientOrigin}/reset-password?token=${resetToken}`;
 
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
-  if (transporter) {
+  if (smtpEnabled) {
     if (!from.includes('@')) {
       from = `"${from}" <${process.env.SMTP_USER}>`;
     }
@@ -199,20 +194,9 @@ export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') 
 }
 
 export async function sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
-  return Promise.race([
-    executeSendPasswordResetOtpEmail(email, otp, name),
-    new Promise((resolve) =>
-      setTimeout(() => {
-        console.warn(`[Reset OTP Timeout] Email send to ${email} timed out after 5s. Returning fallback code.`);
-        resolve({ sent: false, devCode: otp, error: 'Email delivery timed out' });
-      }, 5000)
-    )
-  ]);
-}
-
-async function executeSendPasswordResetOtpEmail(email, otp, name = 'Guest') {
+  const transporter = createSmtpTransporter();
   let from = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
-  if (transporter) {
+  if (smtpEnabled) {
     if (!from.includes('@')) {
       from = `"${from}" <${process.env.SMTP_USER}>`;
     }
