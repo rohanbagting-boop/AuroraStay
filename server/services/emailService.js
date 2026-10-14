@@ -19,6 +19,26 @@ const smtpEnabled =
  */
 function createSmtpTransporter() {
   if (!smtpEnabled) return null;
+
+  const isBrevo =
+    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xsmtpsib-')) ||
+    (process.env.SMTP_HOST && process.env.SMTP_HOST.toLowerCase().includes('brevo'));
+
+  if (isBrevo) {
+    return nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      connectionTimeout: 15000,
+      greetingTimeout: 12000,
+      socketTimeout: 15000,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+  }
+
   const isGmail = process.env.SMTP_HOST.toLowerCase().includes('gmail');
   return nodemailer.createTransport(
     isGmail
