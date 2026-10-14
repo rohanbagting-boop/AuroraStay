@@ -88,9 +88,9 @@ export const requestRegistrationOtp = asyncHandler(async (req, res) => {
       expiresIn: 600,
       maxAttempts: 5,
       // Always expose the code when email fails so users can complete registration
-      ...(!emailResult.sent ? { developmentOtp: otp, emailError: emailResult.error || 'Email timed out' } : {})
+      ...(!emailResult.sent ? { developmentOtp: otp } : {})
     },
-    emailResult.sent ? message : `${message} (Detail: ${emailResult.error || 'timeout'})`
+    message
   );
 });
 
