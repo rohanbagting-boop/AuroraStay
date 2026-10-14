@@ -209,13 +209,25 @@ async function _sendOtpEmail(email, otp, name = 'Guest') {
       return { sent: true };
     } catch (err) {
       console.error('Failed to send OTP email via SMTP:', err.message);
-      return { sent: false, devCode: otp, error: brevoResult?.error || err.message };
+      return {
+        sent: false,
+        devCode: otp,
+        error: `Brevo API: [${brevoResult?.error || 'N/A'}] | SMTP error: [${err.message}]`
+      };
     }
   }
 
   // 4. Fallback
-  console.log(`[AURORA STAY OTP] Code for ${email}: ${otp}`);
-  return { sent: false, devCode: otp, error: brevoResult?.error };
+  const missingVars = [];
+  if (!process.env.SMTP_HOST) missingVars.push('SMTP_HOST');
+  if (!process.env.SMTP_USER) missingVars.push('SMTP_USER');
+  if (!process.env.SMTP_PASS) missingVars.push('SMTP_PASS');
+
+  return {
+    sent: false,
+    devCode: otp,
+    error: `Brevo API: [${brevoResult?.error || 'N/A'}] | SMTP: [${missingVars.length ? 'Missing on Render: ' + missingVars.join(', ') : 'Transporter not configured'}]`
+  };
 }
 
 export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') {
