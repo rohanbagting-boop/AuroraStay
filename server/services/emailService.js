@@ -52,6 +52,56 @@ function createSmtpTransporter() {
 }
 
 /**
+ * Sends transactional email via Brevo REST API over HTTPS (port 443).
+ * Essential for cloud hosts like Render where outbound SMTP ports (25, 465, 587)
+ * are blocked at the network level by the hosting platform.
+ */
+async function sendViaBrevoApi({ to, name = 'Guest', subject, html, text }) {
+  const brevoKey =
+    process.env.BREVO_API_KEY ||
+    process.env.BREVO_KEY ||
+    process.env.SMTP_KEY ||
+    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xsmtpsib-') ? process.env.SMTP_PASS : null) ||
+    (process.env.SMTP_HOST && process.env.SMTP_HOST.includes('brevo') ? process.env.SMTP_PASS : null);
+
+  if (!brevoKey) return null;
+
+  const senderEmail = process.env.BREVO_SENDER || process.env.SMTP_USER || 'rohanbagting@gmail.com';
+  const senderName = process.env.EMAIL_FROM || 'Aurora Stay Hotel';
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': brevoKey.trim(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: to, name }],
+        subject,
+        htmlContent: html,
+        textContent: text
+      })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok) {
+      console.log(`[Brevo API] Email successfully sent to ${to} (MessageId: ${data.messageId})`);
+      return { sent: true };
+    }
+
+    console.warn('[Brevo API error]:', data);
+    return { sent: false, error: data.message || `Brevo API HTTP ${response.status}` };
+  } catch (err) {
+    console.warn('[Brevo API network error]:', err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+/**
  * Wraps a send promise with a hard 20-second timeout so that blocked SMTP
  * connections on cloud hosts (Render/AWS) never hang the HTTP request.
  */
@@ -104,7 +154,14 @@ async function _sendOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
-  // 1. Try Resend API first for fast sub-second delivery
+  // 1. Try Brevo REST API first (over HTTPS port 443 — NEVER blocked by Render's SMTP firewall)
+  const brevoResult = await sendViaBrevoApi({ to: email, name, subject, html, text });
+  if (brevoResult && brevoResult.sent) return brevoResult;
+  if (brevoResult && brevoResult.error) {
+    console.warn('[Brevo API attempt failed, trying other providers]:', brevoResult.error);
+  }
+
+  // 2. Try Resend API
   if (resendClient) {
     try {
       const response = await resendClient.emails.send({
@@ -124,7 +181,7 @@ async function _sendOtpEmail(email, otp, name = 'Guest') {
     }
   }
 
-  // 2. Try SMTP via Nodemailer (port 587 STARTTLS)
+  // 3. Try SMTP via Nodemailer (port 587 STARTTLS)
   if (transporter) {
     try {
       await transporter.sendMail({ from, to: email, subject, html, text });
@@ -132,13 +189,13 @@ async function _sendOtpEmail(email, otp, name = 'Guest') {
       return { sent: true };
     } catch (err) {
       console.error('Failed to send OTP email via SMTP:', err.message);
-      return { sent: false, devCode: otp, error: err.message };
+      return { sent: false, devCode: otp, error: brevoResult?.error || err.message };
     }
   }
 
-  // 3. Fallback
+  // 4. Fallback
   console.log(`[AURORA STAY OTP] Code for ${email}: ${otp}`);
-  return { sent: false, devCode: otp };
+  return { sent: false, devCode: otp, error: brevoResult?.error };
 }
 
 export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') {
@@ -176,6 +233,10 @@ export async function sendPasswordResetEmail(email, resetToken, name = 'Guest') 
       </div>
     </div>
   `;
+
+  // 1. Try Brevo REST API first
+  const brevoResult = await sendViaBrevoApi({ to: email, name, subject, html, text });
+  if (brevoResult && brevoResult.sent) return brevoResult;
 
   if (transporter) {
     try {
@@ -249,7 +310,14 @@ async function _sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
     </div>
   `;
 
-  // 1. Try Resend API first for fast sub-second delivery
+  // 1. Try Brevo REST API first
+  const brevoResult = await sendViaBrevoApi({ to: email, name, subject, html, text });
+  if (brevoResult && brevoResult.sent) return brevoResult;
+  if (brevoResult && brevoResult.error) {
+    console.warn('[Brevo API reset attempt failed, trying other providers]:', brevoResult.error);
+  }
+
+  // 2. Try Resend API first for fast sub-second delivery
   if (resendClient) {
     try {
       const response = await resendClient.emails.send({
@@ -269,7 +337,7 @@ async function _sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
     }
   }
 
-  // 2. Try SMTP via Nodemailer
+  // 3. Try SMTP via Nodemailer
   if (transporter) {
     try {
       await transporter.sendMail({ from, to: email, subject, html, text });
@@ -277,7 +345,7 @@ async function _sendPasswordResetOtpEmail(email, otp, name = 'Guest') {
       return { sent: true };
     } catch (err) {
       console.error('Failed to send password reset OTP via SMTP:', err.message);
-      return { sent: false, devCode: otp, error: err.message };
+      return { sent: false, devCode: otp, error: brevoResult?.error || err.message };
     }
   }
 
