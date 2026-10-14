@@ -68,7 +68,7 @@ export function PasswordRequirements({ password = '' }) {
   );
 }
 
-function PasswordInput({ placeholder, registerObj }) {
+export function PasswordInput({ placeholder, registerObj }) {
   const [show, setShow] = useState(false);
   return (
     <div className="authField" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -638,10 +638,6 @@ export function ResetPassword() {
   const newPassword = watch('newPassword') || '';
 
   async function submit(values) {
-    if (!values.currentPassword) {
-      setError('Please enter your current password.');
-      return;
-    }
     if (!values.newPassword) {
       setError('Please enter your new password.');
       return;
@@ -665,13 +661,12 @@ export function ResetPassword() {
     try {
       await api.post('/auth/reset-password', {
         token,
-        currentPassword: values.currentPassword,
         newPassword: values.newPassword
       });
       setDone(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to reset password. Please check your current password.');
+      setError(e.response?.data?.message || 'Failed to reset password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -697,15 +692,10 @@ export function ResetPassword() {
     <AuthForm
       eyebrow="Account recovery"
       title="Reset your password"
-      subtitle={email ? `Set a new password for ${email}` : 'Enter your current password and choose a new password.'}
+      subtitle={email ? `Set a new password for ${email}` : 'Choose a secure new password for your account.'}
       onSubmit={handleSubmit(submit)}
       error={error}
     >
-      <label>
-        <span>Current password</span>
-        <PasswordInput placeholder="Enter your current password" registerObj={register('currentPassword')} />
-      </label>
-
       <label>
         <span>New password</span>
         <PasswordInput placeholder="Create a strong new password" registerObj={register('newPassword')} />

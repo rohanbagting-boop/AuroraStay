@@ -307,7 +307,7 @@ export const verifyResetCode = asyncHandler(async (req, res) => {
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  const { token, currentPassword, newPassword } = req.body;
+  const { token, newPassword } = req.body;
   if (!token || !newPassword || String(newPassword).length > 128) {
     throw new AppError(400, 'Invalid reset request.', 'INVALID_RESET');
   }
@@ -319,15 +319,6 @@ export const resetPassword = asyncHandler(async (req, res) => {
   }).select('+resetPasswordHash +resetPasswordExpiresAt +password +tokenVersion');
 
   if (!user) throw new AppError(400, 'Invalid or expired reset session. Please request a new code.', 'INVALID_RESET');
-
-  if (!currentPassword) {
-    throw new AppError(400, 'Please enter your current password.', 'CURRENT_PASSWORD_REQUIRED');
-  }
-
-  const isCurrentMatch = await user.comparePassword(currentPassword);
-  if (!isCurrentMatch) {
-    throw new AppError(400, 'Current password is incorrect.', 'INVALID_CURRENT_PASSWORD');
-  }
 
   user.password = newPassword;
   user.resetPasswordHash = undefined;
